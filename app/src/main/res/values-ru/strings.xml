@@ -1,0 +1,105 @@
+<resources>
+    <string name="app_name">Spectra</string>
+    
+    <!-- Navigation -->
+    <string name="nav_home">Главная</string>
+    <string name="nav_profiles">Профили</string>
+    <string name="nav_logs">Логи</string>
+    <string name="nav_settings">Настройки</string>
+
+    <!-- Main Screen -->
+    <string name="disable_vpn">Отключить VPN</string>
+    <string name="enable_vpn">Включить VPN</string>
+
+    <!-- Profiles Screen -->
+    <string name="selected_count">Выбрано: %1$d</string>
+    <string name="delete">Удалить</string>
+    <string name="add_profile">Добавить профиль</string>
+    <string name="no_profiles_yet">Профилей пока нет</string>
+    <string name="refresh_all_remote">Обновить все</string>
+    <string name="import_from_file">Из файла</string>
+    <string name="manual_local">Вручную</string>
+    <string name="remote">Из Интернета</string>
+    <string name="profile_updated">Профиль обновлен</string>
+    <string name="update_failed">Ошибка обновления</string>
+    <string name="profiles_update_result">Обновлено: %1$d, Ошибок: %2$d</string>
+    <string name="add_remote_profile">Добавить из Интернета</string>
+    <string name="edit_remote_profile">Редактировать из Интернета</string>
+    <string name="name">Название</string>
+    <string name="url">URL</string>
+    <string name="auto_update">Автообновление</string>
+    <string name="interval_minutes">Интервал (минуты, мин. 15)</string>
+    <string name="add">Добавить</string>
+    <string name="save">Сохранить</string>
+    <string name="cancel">Отмена</string>
+    <string name="add_local_profile">Добавить вручную</string>
+    <string name="edit_local_profile">Редактировать вручную</string>
+    <string name="configuration_json">Конфигурация (JSON)</string>
+    <string name="active">Активен</string>
+    <string name="refresh">Обновить</string>
+    <string name="edit">Изменить</string>
+    <string name="failed_to_read_file">Не удалось прочитать файл</string>
+
+    <!-- Settings Screen -->
+    <string name="connection">Подключение</string>
+    <string name="ipv6_support">Поддержка IPv6</string>
+    <string name="enable_ipv6_tunneling">Включить туннелирование IPv6</string>
+    <string name="tunnel_ipv4">Туннель (IPv4)</string>
+    <string name="tunnel_ipv6">Туннель (IPv6)</string>
+    <string name="advanced">Дополнительно</string>
+    <string name="debug_mode">Режим отладки</string>
+    <string name="use_test_config">Использовать тестовую конфигурацию из assets</string>
+    <string name="address">Адрес</string>
+    <string name="dns_server">DNS-сервер</string>
+    <string name="mtu">MTU</string>
+    <string name="easy_import_title">Быстрый импорт</string>
+    <string name="supported_links">Поддерживаемые ссылки</string>
+    <string name="supported_links_enabled">Включено</string>
+    <string name="supported_links_disabled">Не включено в настройках системы</string>
+
+    <!-- Logs Screen -->
+    <string name="toggle_pause">Пауза/Возоновление</string>
+    <string name="copy_logs">Копировать логи</string>
+    <string name="clear_logs">Очистить логи</string>
+
+    <!-- MainActivity & Dialogs -->
+    <string name="vpn_permission_denied">В доступе к VPN отказано</string>
+    <string name="replace_profile_q">Заменить профиль?</string>
+    <string name="profile_exists_replace_q">Профиль с именем \'%1$s\' уже существует. Хотите заменить его?</string>
+    <string name="replace">Заменить</string>
+    <string name="enable_easy_import">Включить быстрый импорт</string>
+    <string name="easy_import_desc">Чтобы ссылки \'spectra.local\' открывались сразу в приложении, включите \'Поддерживаемые ссылки\' в настройках системы.</string>
+    <string name="configure">Настроить</string>
+    <string name="later">Позже</string>
+    <string name="deep_link_settings_not_available">Настройки глубоких ссылок недоступны на этом устройстве.</string>
+    <string name="could_not_open_settings">Не удалось открыть настройки</string>
+    <string name="invalid_link">Некорректная ссылка</string>
+    <string name="profile_added">Профиль \'%1$s\' добавлен</string>
+    <string name="failed_to_add_profile">Не удалось добавить профиль: %1$s</string>
+    <string name="select_profile_or_debug">Пожалуйста, выберите профиль или включите режим отладки</string>
+    
+    <!-- P2P -->
+    <string name="p2p_receive">Получить по P2P</string>
+    <string name="p2p_share">Поделиться по P2P</string>
+    <string name="p2p_receive_title">Получение профиля (P2P)</string>
+    <string name="p2p_scan_qr_desc">Отсканируйте этот QR-код с другого устройства, чтобы отправить сюда профиль.</string>
+    <string name="p2p_scan_title">Сканировать P2P QR</string>
+    <string name="p2p_camera_permission_denied">Требуется доступ к камере</string>
+    <string name="p2p_accept_title">Принять профиль?</string>
+    <string name="p2p_replace_title">Заменить профиль?</string>
+    <string name="p2p_share_msg">Устройство %1$s хочет поделиться профилем \'%2$s\'.</string>
+    <string name="p2p_replace_msg">Этот профиль уже существует. Хотите заменить его?</string>
+    <string name="p2p_sent_success">Профиль успешно отправлен</string>
+    <string name="p2p_send_failed">Ошибка отправки профиля: %1$s</string>
+    <string name="p2p_server_error">Ошибка запуска P2P сервера: %1$s</string>
+    <string name="p2p_processed">Профиль \'%1$s\' обработан</string>
+    <string name="accept">Принять</string>
+    <string name="p2p_same_network_info">Убедитесь, что оба устройства подключены к одной Wi-Fi сети.</string>
+    <string name="p2p_url">URL: %1$s</string>
+    <string name="p2p_token">Токен: %1$s</string>
+
+    <!-- Notification -->
+    <string name="notification_channel_name">Состояние сервиса</string>
+    <string name="notification_content_active">VPN подключен</string>
+    <string name="notification_action_stop">Остановить</string>
+</resources>

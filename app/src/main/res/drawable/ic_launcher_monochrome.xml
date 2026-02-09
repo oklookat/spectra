@@ -1,0 +1,22 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- Left beam -->
+    <path
+        android:fillColor="@android:color/white"
+        android:pathData="M42,18 L22,96 L48,96 Z"/>
+
+    <!-- Center beam (dominant) -->
+    <path
+        android:fillColor="@android:color/white"
+        android:pathData="M54,12 L36,96 L72,96 Z"/>
+
+    <!-- Right beam -->
+    <path
+        android:fillColor="@android:color/white"
+        android:pathData="M66,18 L60,96 L86,96 Z"/>
+
+</vector>

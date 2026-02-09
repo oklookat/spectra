@@ -1,0 +1,106 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name" translatable="false">Spectra</string>
+    
+    <!-- Navigation -->
+    <string name="nav_home">Home</string>
+    <string name="nav_profiles">Profiles</string>
+    <string name="nav_logs">Logs</string>
+    <string name="nav_settings">Settings</string>
+
+    <!-- Main Screen -->
+    <string name="disable_vpn">Disable VPN</string>
+    <string name="enable_vpn">Enable VPN</string>
+
+    <!-- Profiles Screen -->
+    <string name="selected_count">%1$d selected</string>
+    <string name="delete">Delete</string>
+    <string name="add_profile">Add Profile</string>
+    <string name="no_profiles_yet">No profiles yet</string>
+    <string name="refresh_all_remote">Refresh All Remote</string>
+    <string name="import_from_file">Import from File</string>
+    <string name="manual_local">Manual (Local)</string>
+    <string name="remote">Remote</string>
+    <string name="profile_updated">Profile updated</string>
+    <string name="update_failed">Update failed</string>
+    <string name="profiles_update_result">Updated: %1$d, Failed: %2$d</string>
+    <string name="add_remote_profile">Add Remote Profile</string>
+    <string name="edit_remote_profile">Edit Remote Profile</string>
+    <string name="name">Name</string>
+    <string name="url">URL</string>
+    <string name="auto_update">Auto Update</string>
+    <string name="interval_minutes">Interval (minutes, min 15)</string>
+    <string name="add">Add</string>
+    <string name="save">Save</string>
+    <string name="cancel">Cancel</string>
+    <string name="add_local_profile">Add Local Profile</string>
+    <string name="edit_local_profile">Edit Local Profile</string>
+    <string name="configuration_json">Configuration (JSON)</string>
+    <string name="active">Active</string>
+    <string name="refresh">Refresh</string>
+    <string name="edit">Edit</string>
+    <string name="failed_to_read_file">Failed to read file</string>
+
+    <!-- Settings Screen -->
+    <string name="connection">Connection</string>
+    <string name="ipv6_support">IPv6 Support</string>
+    <string name="enable_ipv6_tunneling">Enable IPv6 tunneling</string>
+    <string name="tunnel_ipv4">Tunnel (IPv4)</string>
+    <string name="tunnel_ipv6">Tunnel (IPv6)</string>
+    <string name="advanced">Advanced</string>
+    <string name="debug_mode">Debug Mode</string>
+    <string name="use_test_config">Use test configuration from assets</string>
+    <string name="address">Address</string>
+    <string name="dns_server">DNS Server</string>
+    <string name="mtu">MTU</string>
+    <string name="easy_import_title">Easy Import</string>
+    <string name="supported_links">Supported Links</string>
+    <string name="supported_links_enabled">Enabled</string>
+    <string name="supported_links_disabled">Not enabled in system settings</string>
+
+    <!-- Logs Screen -->
+    <string name="toggle_pause">Toggle Pause</string>
+    <string name="copy_logs">Copy Logs</string>
+    <string name="clear_logs">Clear Logs</string>
+
+    <!-- MainActivity & Dialogs -->
+    <string name="vpn_permission_denied">VPN permission denied</string>
+    <string name="replace_profile_q">Replace profile?</string>
+    <string name="profile_exists_replace_q">Profile with name \'%1$s\' already exists. Do you want to replace it?</string>
+    <string name="replace">Replace</string>
+    <string name="enable_easy_import">Enable Easy Import</string>
+    <string name="easy_import_desc">To make \'spectra.local\' links open directly in the app, please enable \'Supported links\' in the system settings.</string>
+    <string name="configure">Configure</string>
+    <string name="later">Later</string>
+    <string name="deep_link_settings_not_available">Deep link settings are not available on this device.</string>
+    <string name="could_not_open_settings">Could not open settings</string>
+    <string name="invalid_link">Invalid link</string>
+    <string name="profile_added">Profile \'%1$s\' added</string>
+    <string name="failed_to_add_profile">Failed to add profile: %1$s</string>
+    <string name="select_profile_or_debug">Please select a profile or enable Debug Mode</string>
+    
+    <!-- P2P -->
+    <string name="p2p_receive">Receive via P2P</string>
+    <string name="p2p_share">Share via P2P</string>
+    <string name="p2p_receive_title">Receive Profile (P2P)</string>
+    <string name="p2p_scan_qr_desc">Scan this QR code from another device to share a profile.</string>
+    <string name="p2p_scan_title">Scan P2P QR</string>
+    <string name="p2p_camera_permission_denied">Camera permission required</string>
+    <string name="p2p_accept_title">Accept Profile?</string>
+    <string name="p2p_replace_title">Replace Profile?</string>
+    <string name="p2p_share_msg">Device %1$s wants to share profile \'%2$s\'.</string>
+    <string name="p2p_replace_msg">This profile already exists. Do you want to replace it?</string>
+    <string name="p2p_sent_success">Profile sent successfully</string>
+    <string name="p2p_send_failed">Failed to send profile: %1$s</string>
+    <string name="p2p_server_error">Failed to start P2P server: %1$s</string>
+    <string name="p2p_processed">Profile \'%1$s\' processed</string>
+    <string name="accept">Accept</string>
+    <string name="p2p_same_network_info">Make sure both devices are connected to the same Wi-Fi network.</string>
+    <string name="p2p_url">URL: %1$s</string>
+    <string name="p2p_token">Token: %1$s</string>
+
+    <!-- Notification -->
+    <string name="notification_channel_name">Service status</string>
+    <string name="notification_content_active">VPN is active</string>
+    <string name="notification_action_stop">Stop</string>
+</resources>
