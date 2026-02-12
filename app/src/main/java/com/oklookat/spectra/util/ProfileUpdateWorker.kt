@@ -14,14 +14,27 @@ class ProfileUpdateWorker(
         val profileManager = ProfileManager(applicationContext)
         val currentTime = System.currentTimeMillis()
         
-        // Filter profiles that are remote, have auto-update enabled, AND it's time to update them
-        val profiles = profileManager.getProfiles().filter { 
+        // 1. Update remote groups
+        val groups = profileManager.getGroups().filter { 
             it.isRemote && it.autoUpdateEnabled && 
             (currentTime - it.lastUpdated >= it.autoUpdateIntervalMinutes * 60 * 1000L)
         }
         
-        if (profiles.isEmpty()) return Result.success()
+        for (group in groups) {
+            try {
+                profileManager.updateGroupProfiles(group)
+                profileManager.saveGroups(profileManager.getGroups().map { 
+                    if (it.id == group.id) it.copy(lastUpdated = System.currentTimeMillis()) else it 
+                })
+            } catch (_: Exception) { }
+        }
 
+        // 2. Update individual remote profiles
+        val profiles = profileManager.getProfiles().filter { 
+            it.isRemote && !it.isImported && it.autoUpdateEnabled && 
+            (currentTime - it.lastUpdated >= it.autoUpdateIntervalMinutes * 60 * 1000L)
+        }
+        
         var hasError = false
         for (profile in profiles) {
             val url = profile.url ?: continue
@@ -29,12 +42,9 @@ class ProfileUpdateWorker(
             
             try {
                 val contentChanged = profileManager.downloadProfile(url, fileName)
-                
-                // Update lastUpdated timestamp regardless of content change if download was successful
                 val updatedProfile = profile.copy(lastUpdated = System.currentTimeMillis())
                 profileManager.updateProfile(updatedProfile)
                 
-                // If this profile is currently running in VPN and content changed, restart it
                 if (contentChanged && XrayVpnService.isServiceRunning && XrayVpnService.runningProfileId == profile.id) {
                     val content = profileManager.getProfileContent(updatedProfile)
                     if (!content.isNullOrEmpty()) {
@@ -76,15 +86,18 @@ class ProfileUpdateWorker(
 
         fun setupPeriodicWork(context: Context) {
             val profileManager = ProfileManager(context)
-            val autoUpdateProfiles = profileManager.getProfiles().filter { it.isRemote && it.autoUpdateEnabled }
+            val autoUpdateProfiles = profileManager.getProfiles().filter { it.isRemote && !it.isImported && it.autoUpdateEnabled }
+            val autoUpdateGroups = profileManager.getGroups().filter { it.isRemote && it.autoUpdateEnabled }
 
-            if (autoUpdateProfiles.isEmpty()) {
+            if (autoUpdateProfiles.isEmpty() && autoUpdateGroups.isEmpty()) {
                 WorkManager.getInstance(context).cancelUniqueWork(WORK_NAME)
                 return
             }
 
-            // Find the minimum interval, but no less than 15 minutes (WorkManager limit)
-            val minInterval = autoUpdateProfiles.minOf { it.autoUpdateIntervalMinutes }.coerceAtLeast(15)
+            val minProfileInterval = autoUpdateProfiles.minOfOrNull { it.autoUpdateIntervalMinutes } ?: Int.MAX_VALUE
+            val minGroupInterval = autoUpdateGroups.minOfOrNull { it.autoUpdateIntervalMinutes } ?: Int.MAX_VALUE
+            
+            val minInterval = minOf(minProfileInterval, minGroupInterval).coerceAtLeast(15)
 
             val constraints = Constraints.Builder()
                 .setRequiredNetworkType(NetworkType.CONNECTED)

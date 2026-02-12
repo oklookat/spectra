@@ -28,6 +28,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.core.net.toUri
+import com.oklookat.spectra.model.PendingGroup
 import com.oklookat.spectra.model.PendingProfile
 import com.oklookat.spectra.model.Screen
 import com.oklookat.spectra.ui.screens.LogsScreen
@@ -106,6 +107,18 @@ class MainActivity : ComponentActivity() {
                     }
                 }
 
+                LaunchedEffect(uiState.deepLinkGroup) {
+                    uiState.deepLinkGroup?.let { dg ->
+                        val existing = uiState.groups.find { it.name == dg.name }
+                        if (existing != null) {
+                            viewModel.setPendingGroupToReplace(dg)
+                        } else {
+                            addGroupFromDeepLink(dg)
+                            viewModel.setDeepLinkGroup(null)
+                        }
+                    }
+                }
+
                 LaunchedEffect(Unit) {
                     viewModel.events.collect { event ->
                         when (event) {
@@ -152,6 +165,42 @@ class MainActivity : ComponentActivity() {
                             TextButton(onClick = { 
                                 viewModel.setPendingProfileToReplace(null)
                                 viewModel.setDeepLinkProfile(null) 
+                            }) {
+                                Text(stringResource(R.string.cancel))
+                            }
+                        }
+                    )
+                }
+
+                uiState.pendingGroupToReplace?.let { dg ->
+                    AlertDialog(
+                        onDismissRequest = { 
+                            viewModel.setPendingGroupToReplace(null)
+                            viewModel.setDeepLinkGroup(null) 
+                        },
+                        title = { Text(stringResource(R.string.p2p_replace_title)) },
+                        text = { Text(stringResource(R.string.p2p_replace_msg)) },
+                        confirmButton = {
+                            Button(onClick = {
+                                val existing = uiState.groups.find { it.name == dg.name }
+                                if (existing != null) {
+                                    viewModel.replaceRemoteGroup(
+                                        existingGroup = existing,
+                                        url = dg.url,
+                                        autoUpdate = dg.autoUpdate,
+                                        interval = dg.interval
+                                    )
+                                }
+                                viewModel.setPendingGroupToReplace(null)
+                                viewModel.setDeepLinkGroup(null)
+                            }) {
+                                Text(stringResource(R.string.replace))
+                            }
+                        },
+                        dismissButton = {
+                            TextButton(onClick = { 
+                                viewModel.setPendingGroupToReplace(null)
+                                viewModel.setDeepLinkGroup(null) 
                             }) {
                                 Text(stringResource(R.string.cancel))
                             }
@@ -232,9 +281,7 @@ class MainActivity : ComponentActivity() {
     private fun handleIntent(intent: Intent?) {
         val uri = intent?.data ?: return
         try {
-            val encodedData = if (uri.scheme == "oklspectra") {
-                uri.toString().substringAfter("oklspectra://")
-            } else if (uri.scheme == "https" && uri.host == "spectra.local") {
+            val encodedData = if (uri.scheme == "https" && uri.host == "spectra.local") {
                 uri.getQueryParameter("data") ?: ""
             } else {
                 ""
@@ -248,13 +295,18 @@ class MainActivity : ComponentActivity() {
                 split[0] to split.getOrElse(1) { "" }
             }
 
+            val type = params["type"] ?: "profile"
             val name = params["name"] ?: ""
             val url = params["url"] ?: ""
             val autoUpdate = params["autoupdate"]?.toBoolean() ?: false
             val interval = params["autoupdateinterval"]?.toIntOrNull() ?: 15
 
             if (name.isNotEmpty() && url.isNotEmpty()) {
-                viewModel.setDeepLinkProfile(PendingProfile(name, url, autoUpdate, interval))
+                if (type == "group") {
+                    viewModel.setDeepLinkGroup(PendingGroup(name, url, autoUpdate, interval))
+                } else {
+                    viewModel.setDeepLinkProfile(PendingProfile(name, url, autoUpdate, interval))
+                }
                 viewModel.setScreen(Screen.Profiles)
             }
         } catch (_: Exception) {
@@ -263,12 +315,14 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun addProfileFromDeepLink(dp: PendingProfile) {
-        viewModel.addRemoteProfile(dp.name, dp.url, dp.autoUpdate, dp.interval) { result ->
-            if (result.isSuccess) {
-                Toast.makeText(this, getString(R.string.profile_added, dp.name), Toast.LENGTH_SHORT).show()
-            } else {
-                Toast.makeText(this, getString(R.string.failed_to_add_profile, result.exceptionOrNull()?.message ?: ""), Toast.LENGTH_LONG).show()
-            }
+        viewModel.saveRemoteProfile(null, dp.name, dp.url, dp.autoUpdate, dp.interval) {
+            Toast.makeText(this, getString(R.string.profile_added, dp.name), Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    private fun addGroupFromDeepLink(dg: PendingGroup) {
+        viewModel.saveGroup(null, dg.name, dg.url, dg.autoUpdate, dg.interval) {
+            Toast.makeText(this, getString(R.string.group_added, dg.name), Toast.LENGTH_SHORT).show()
         }
     }
 

@@ -12,6 +12,8 @@
     <string name="enable_vpn">Включить VPN</string>
 
     <!-- Profiles Screen -->
+    <string name="profiles">Профили</string>
+    <string name="all">Все</string>
     <string name="selected_count">Выбрано: %1$d</string>
     <string name="delete">Удалить</string>
     <string name="add_profile">Добавить профиль</string>
@@ -39,6 +41,12 @@
     <string name="refresh">Обновить</string>
     <string name="edit">Изменить</string>
     <string name="failed_to_read_file">Не удалось прочитать файл</string>
+    <string name="add_group">Добавить группу</string>
+    <string name="edit_group">Редактировать группу</string>
+    <string name="delete_group">Удалить группу</string>
+    <string name="share_group">Поделиться группой (P2P)</string>
+    <string name="share_source_url">Поделиться URL</string>
+    <string name="url_optional_remote">URL (необязательно, для удаленной группы)</string>
 
     <!-- Settings Screen -->
     <string name="connection">Подключение</string>
@@ -77,6 +85,8 @@
     <string name="profile_added">Профиль \'%1$s\' добавлен</string>
     <string name="failed_to_add_profile">Не удалось добавить профиль: %1$s</string>
     <string name="select_profile_or_debug">Пожалуйста, выберите профиль или включите режим отладки</string>
+    <string name="group_added">Группа \'%1$s\' добавлена</string>
+    <string name="failed_to_add_group">Не удалось добавить группу: %1$s</string>
     
     <!-- P2P -->
     <string name="p2p_receive">Получить по P2P</string>
@@ -85,14 +95,14 @@
     <string name="p2p_scan_qr_desc">Отсканируйте этот QR-код с другого устройства, чтобы отправить сюда профиль.</string>
     <string name="p2p_scan_title">Сканировать P2P QR</string>
     <string name="p2p_camera_permission_denied">Требуется доступ к камере</string>
-    <string name="p2p_accept_title">Принять профиль?</string>
-    <string name="p2p_replace_title">Заменить профиль?</string>
-    <string name="p2p_share_msg">Устройство %1$s хочет поделиться профилем \'%2$s\'.</string>
-    <string name="p2p_replace_msg">Этот профиль уже существует. Хотите заменить его?</string>
-    <string name="p2p_sent_success">Профиль успешно отправлен</string>
-    <string name="p2p_send_failed">Ошибка отправки профиля: %1$s</string>
+    <string name="p2p_accept_title">Принять?</string>
+    <string name="p2p_replace_title">Заменить?</string>
+    <string name="p2p_share_msg">Устройство %1$s хочет поделиться \'%2$s\'.</string>
+    <string name="p2p_replace_msg">Этот объект уже существует. Хотите заменить его?</string>
+    <string name="p2p_sent_success">Отправлено успешно</string>
+    <string name="p2p_send_failed">Ошибка отправки: %1$s</string>
     <string name="p2p_server_error">Ошибка запуска P2P сервера: %1$s</string>
-    <string name="p2p_processed">Профиль \'%1$s\' обработан</string>
+    <string name="p2p_processed">Объект \'%1$s\' обработан</string>
     <string name="accept">Принять</string>
     <string name="p2p_same_network_info">Убедитесь, что оба устройства подключены к одной Wi-Fi сети.</string>
     <string name="p2p_url">URL: %1$s</string>

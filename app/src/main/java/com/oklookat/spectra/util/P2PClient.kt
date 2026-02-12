@@ -16,9 +16,9 @@ class P2PClient {
     private val gson = Gson()
     private val TAG = "P2PClient"
 
-    suspend fun sendProfile(url: String, payload: P2PPayload): Result<Unit> = withContext(Dispatchers.IO) {
+    suspend fun sendPayload(url: String, payload: P2PPayload): Result<Unit> = withContext(Dispatchers.IO) {
         try {
-            Log.d(TAG, "Encrypting and sending profile to $url")
+            Log.d(TAG, "Encrypting and sending payload to $url")
             
             // 1. Serialize payload to JSON
             val plainJson = gson.toJson(payload)
@@ -37,7 +37,7 @@ class P2PClient {
 
             client.newCall(request).execute().use { response ->
                 if (response.isSuccessful) {
-                    Log.d(TAG, "Successfully sent encrypted profile")
+                    Log.d(TAG, "Successfully sent encrypted payload")
                     Result.success(Unit)
                 } else {
                     val errorMsg = "Failed to send: ${response.code} ${response.message}"
@@ -46,7 +46,7 @@ class P2PClient {
                 }
             }
         } catch (e: Exception) {
-            Log.e(TAG, "Error sending profile to $url", e)
+            Log.e(TAG, "Error sending payload to $url", e)
             Result.failure(e)
         }
     }

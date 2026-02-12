@@ -38,6 +38,7 @@ sealed class ShareLink {
         val encryption: String get() = params["encryption"] ?: "auto"
         val security: String get() = params["security"] ?: "none"
         val transport: String get() = params["type"] ?: "tcp"
+        val sni: String get() = params["sni"] ?: host
     }
 
     /**
@@ -71,7 +72,9 @@ sealed class ShareLink {
         override val port: Int,
         val params: Map<String, String>,
         override val name: String?
-    ) : ShareLink()
+    ) : ShareLink() {
+        val sni: String get() = params["sni"] ?: host
+    }
 
     data class Shadowsocks(
         val method: String,
