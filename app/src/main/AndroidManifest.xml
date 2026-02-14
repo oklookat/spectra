@@ -56,7 +56,7 @@
         </activity>
 
         <service
-            android:name=".XrayVpnService"
+            android:name=".service.XrayVpnService"
             android:exported="false"
             android:foregroundServiceType="specialUse"
             android:permission="android.permission.BIND_VPN_SERVICE">

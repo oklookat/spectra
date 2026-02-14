@@ -1,4 +1,4 @@
-package com.oklookat.spectra.util
+package com.oklookat.spectra.data.repository
 
 import android.content.Context
 import android.util.Base64
@@ -18,7 +18,7 @@ import java.io.FileOutputStream
 import java.nio.charset.Charset
 import java.util.UUID
 
-class ProfileManager(context: Context) {
+class ProfileRepository(context: Context) {
     private val sharedPreferences = context.getSharedPreferences("profiles_prefs", Context.MODE_PRIVATE)
     private val gson = Gson()
     private val client = OkHttpClient()
@@ -273,8 +273,6 @@ class ProfileManager(context: Context) {
         if (!file.exists()) return null
         val content = file.readText(Charset.defaultCharset()).trim()
         
-        // Check if content is a share link
-        // TODO
         if (content.startsWith("vless://") || content.startsWith("vmess://") || 
             content.startsWith("ss://") || content.startsWith("trojan://")) {
             return try {

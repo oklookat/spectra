@@ -1,4 +1,4 @@
-package com.oklookat.spectra.util
+package com.oklookat.spectra.data.repository
 
 import android.content.Context
 import android.content.SharedPreferences
@@ -10,7 +10,6 @@ class SettingsRepository(context: Context) {
 
     var useDebugConfig: Boolean
         get() {
-            // Force false in non-debug builds for safety
             if (!BuildConfig.DEBUG) return false
             return settingsPrefs.getBoolean("use_debug_config", true)
         }

@@ -1,26 +1,27 @@
-package com.oklookat.spectra
+package com.oklookat.spectra.ui.viewmodel
 
 import android.app.Application
 import android.content.pm.verify.domain.DomainVerificationManager
 import android.content.pm.verify.domain.DomainVerificationUserState
 import android.os.Build
-import androidx.annotation.StringRes
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.oklookat.spectra.R
+import com.oklookat.spectra.data.repository.ProfileRepository
+import com.oklookat.spectra.data.repository.SettingsRepository
 import com.oklookat.spectra.model.Group
 import com.oklookat.spectra.model.P2PPayload
 import com.oklookat.spectra.model.PendingGroup
 import com.oklookat.spectra.model.PendingProfile
 import com.oklookat.spectra.model.Profile
 import com.oklookat.spectra.model.Screen
+import com.oklookat.spectra.service.XrayVpnService
 import com.oklookat.spectra.util.LogManager
 import com.oklookat.spectra.util.P2PClient
 import com.oklookat.spectra.util.P2PServer
-import com.oklookat.spectra.util.ProfileManager
-import com.oklookat.spectra.util.SettingsRepository
 import com.oklookat.spectra.util.TvUtils
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -30,51 +31,8 @@ import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-data class SettingsState(
-    val useDebugConfig: Boolean = false,
-    val isIpv6Enabled: Boolean = false,
-    val vpnAddress: String = "",
-    val vpnDns: String = "",
-    val vpnAddressIpv6: String = "",
-    val vpnDnsIpv6: String = "",
-    val vpnMtu: Int = 9000
-)
-
-data class MainUiState(
-    val isVpnEnabled: Boolean = XrayVpnService.isServiceRunning,
-    val currentScreen: Screen = Screen.Main,
-    val groups: List<Group> = emptyList(),
-    val profiles: List<Profile> = emptyList(),
-    val selectedProfileId: String? = null,
-    val deepLinkProfile: PendingProfile? = null,
-    val pendingProfileToReplace: PendingProfile? = null,
-    val deepLinkGroup: PendingGroup? = null,
-    val pendingGroupToReplace: PendingGroup? = null,
-    val showDeepLinkVerifyDialog: Boolean = false,
-    val isDeepLinkVerified: Boolean = true,
-    val settings: SettingsState = SettingsState(),
-    
-    // P2P State
-    val isP2PServerRunning: Boolean = false,
-    val p2pServerUrl: String? = null,
-    val p2pServerToken: String? = null,
-    val p2pPayloadToAccept: P2PPayload? = null,
-    val showP2PReplaceDialog: Boolean = false
-)
-
-sealed class MainUiEvent {
-    data class ShowToast(
-        val message: String? = null,
-        @get:StringRes val messageResId: Int? = null,
-        val formatArgs: List<Any> = emptyList(),
-        val isLong: Boolean = false
-    ) : MainUiEvent()
-    data object RestartVpn : MainUiEvent()
-    data object OpenDeepLinkSettings : MainUiEvent()
-}
-
 class MainViewModel(application: Application) : AndroidViewModel(application) {
-    private val profileManager = ProfileManager(application)
+    private val profileRepository = ProfileRepository(application)
     private val settingsRepository = SettingsRepository(application)
     private val p2pClient = P2PClient()
     private var p2pServer: P2PServer? = null
@@ -103,9 +61,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private fun loadInitialState() {
         uiState = uiState.copy(
-            groups = profileManager.getGroups(),
-            profiles = profileManager.getProfiles(),
-            selectedProfileId = profileManager.getSelectedProfileId(),
+            groups = profileRepository.getGroups(),
+            profiles = profileRepository.getProfiles(),
+            selectedProfileId = profileRepository.getSelectedProfileId(),
             settings = SettingsState(
                 useDebugConfig = settingsRepository.useDebugConfig,
                 isIpv6Enabled = settingsRepository.isIpv6Enabled,
@@ -133,12 +91,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun selectProfile(id: String?) {
         uiState = uiState.copy(selectedProfileId = id)
-        profileManager.setSelectedProfileId(id)
+        profileRepository.setSelectedProfileId(id)
     }
 
     fun getSelectedProfileContent(): String? {
         val profile = uiState.profiles.find { it.id == uiState.selectedProfileId } ?: return null
-        return profileManager.getProfileContent(profile)
+        return profileRepository.getProfileContent(profile)
     }
 
     // --- Group Operations ---
@@ -154,18 +112,19 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             if (existing == null) {
                 if (url.isNullOrBlank()) {
-                    val groups = profileManager.getGroups().toMutableList()
+                    val groups = profileRepository.getGroups().toMutableList()
                     groups.add(Group(name = name))
-                    profileManager.saveGroups(groups)
-                    uiState = uiState.copy(groups = profileManager.getGroups())
+                    profileRepository.saveGroups(groups)
+                    uiState = uiState.copy(groups = profileRepository.getGroups())
                     onComplete()
                 } else {
-                    val result = profileManager.addRemoteGroup(name, url, autoUpdate, interval)
+                    val result = profileRepository.addRemoteGroup(name, url, autoUpdate, interval)
                     if (result.isSuccess) {
                         uiState = uiState.copy(
-                            groups = profileManager.getGroups(),
-                            profiles = profileManager.getProfiles()
+                            groups = profileRepository.getGroups(),
+                            profiles = profileRepository.getProfiles()
                         )
+                        _events.emit(MainUiEvent.ShowToast(messageResId = R.string.group_added, formatArgs = listOf(name)))
                         onComplete()
                     } else {
                         val error = result.exceptionOrNull()?.message ?: "Unknown error"
@@ -180,12 +139,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     autoUpdateEnabled = autoUpdate,
                     autoUpdateIntervalMinutes = interval
                 )
-                val groups = profileManager.getGroups().toMutableList()
+                val groups = profileRepository.getGroups().toMutableList()
                 val index = groups.indexOfFirst { it.id == existing.id }
                 if (index != -1) {
                     groups[index] = updated
-                    profileManager.saveGroups(groups)
-                    uiState = uiState.copy(groups = profileManager.getGroups())
+                    profileRepository.saveGroups(groups)
+                    uiState = uiState.copy(groups = profileRepository.getGroups())
                 }
                 onComplete()
             }
@@ -201,16 +160,16 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     autoUpdateIntervalMinutes = interval,
                     lastUpdated = System.currentTimeMillis()
                 )
-                profileManager.updateGroupProfiles(updatedGroup)
-                val groups = profileManager.getGroups().toMutableList()
+                profileRepository.updateGroupProfiles(updatedGroup)
+                val groups = profileRepository.getGroups().toMutableList()
                 val index = groups.indexOfFirst { it.id == existingGroup.id }
                 if (index != -1) {
                     groups[index] = updatedGroup
-                    profileManager.saveGroups(groups)
+                    profileRepository.saveGroups(groups)
                 }
                 uiState = uiState.copy(
-                    groups = profileManager.getGroups(),
-                    profiles = profileManager.getProfiles()
+                    groups = profileRepository.getGroups(),
+                    profiles = profileRepository.getProfiles()
                 )
                 _events.emit(MainUiEvent.ShowToast(messageResId = R.string.profile_updated))
             } catch (e: Exception) {
@@ -222,11 +181,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun deleteGroup(groupId: String) {
         viewModelScope.launch {
-            profileManager.deleteGroup(groupId)
+            profileRepository.deleteGroup(groupId)
             uiState = uiState.copy(
-                groups = profileManager.getGroups(),
-                profiles = profileManager.getProfiles(),
-                selectedProfileId = profileManager.getSelectedProfileId()
+                groups = profileRepository.getGroups(),
+                profiles = profileRepository.getProfiles(),
+                selectedProfileId = profileRepository.getSelectedProfileId()
             )
         }
     }
@@ -234,8 +193,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun refreshGroup(group: Group) {
         viewModelScope.launch {
             try {
-                profileManager.updateGroupProfiles(group)
-                uiState = uiState.copy(profiles = profileManager.getProfiles())
+                profileRepository.updateGroupProfiles(group)
+                uiState = uiState.copy(profiles = profileRepository.getProfiles())
                 _events.emit(MainUiEvent.ShowToast(messageResId = R.string.profile_updated))
             } catch (e: Exception) {
                 LogManager.addLog("[App] Error refreshing group: ${e.message}")
@@ -257,9 +216,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     ) {
         viewModelScope.launch {
             if (existing == null) {
-                val result = profileManager.addRemoteProfile(name, url, autoUpdate, interval, groupId)
+                val result = profileRepository.addRemoteProfile(name, url, autoUpdate, interval, groupId)
                 if (result.isSuccess) {
-                    uiState = uiState.copy(profiles = profileManager.getProfiles())
+                    uiState = uiState.copy(profiles = profileRepository.getProfiles())
+                    _events.emit(MainUiEvent.ShowToast(messageResId = R.string.profile_added, formatArgs = listOf(name)))
                     onComplete()
                 } else {
                     val error = result.exceptionOrNull()?.message ?: "Unknown error"
@@ -290,13 +250,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             if (existing == null) {
                 withContext(Dispatchers.IO) {
-                    profileManager.saveLocalProfile(name, content, groupId)
+                    profileRepository.saveLocalProfile(name, content, groupId)
                 }
             } else {
                 val needsRestart = updateProfileInternal(existing.copy(name = name), content)
                 if (needsRestart) _events.emit(MainUiEvent.RestartVpn)
             }
-            uiState = uiState.copy(profiles = profileManager.getProfiles())
+            uiState = uiState.copy(profiles = profileRepository.getProfiles())
             onComplete()
         }
     }
@@ -306,7 +266,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             try {
                 val fileName = existingProfile.fileName ?: "${existingProfile.id}.json"
                 val wasRunning = XrayVpnService.isServiceRunning && XrayVpnService.runningProfileId == existingProfile.id
-                val contentChanged = profileManager.downloadProfile(url, fileName)
+                val contentChanged = profileRepository.downloadProfile(url, fileName)
                 
                 val updatedProfile = existingProfile.copy(
                     url = url,
@@ -317,9 +277,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 )
                 
                 withContext(Dispatchers.IO) {
-                    profileManager.updateProfile(updatedProfile)
+                    profileRepository.updateProfile(updatedProfile)
                 }
-                uiState = uiState.copy(profiles = profileManager.getProfiles())
+                uiState = uiState.copy(profiles = profileRepository.getProfiles())
                 _events.emit(MainUiEvent.ShowToast(messageResId = R.string.profile_updated))
                 
                 if (wasRunning && contentChanged) _events.emit(MainUiEvent.RestartVpn)
@@ -341,10 +301,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 try {
                     val url = profile.url ?: continue
                     val fileName = profile.fileName ?: continue
-                    val changed = profileManager.downloadProfile(url, fileName)
+                    val changed = profileRepository.downloadProfile(url, fileName)
                     if (changed) {
                         withContext(Dispatchers.IO) {
-                            profileManager.updateProfile(profile.copy(lastUpdated = System.currentTimeMillis()))
+                            profileRepository.updateProfile(profile.copy(lastUpdated = System.currentTimeMillis()))
                         }
                         if (XrayVpnService.isServiceRunning && XrayVpnService.runningProfileId == profile.id) needsRestart = true
                     }
@@ -355,7 +315,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 }
             }
             
-            if (success > 0) uiState = uiState.copy(profiles = profileManager.getProfiles())
+            if (success > 0) uiState = uiState.copy(profiles = profileRepository.getProfiles())
             _events.emit(MainUiEvent.ShowToast(messageResId = R.string.profiles_update_result, formatArgs = listOf(success, failed)))
             if (needsRestart) _events.emit(MainUiEvent.RestartVpn)
         }
@@ -364,12 +324,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private suspend fun updateProfileInternal(profile: Profile, content: String? = null): Boolean = withContext(Dispatchers.IO) {
         var contentChanged = false
         if (content != null) {
-            contentChanged = profileManager.updateLocalProfileContent(profile, content)
+            contentChanged = profileRepository.updateLocalProfileContent(profile, content)
         }
-        profileManager.updateProfile(profile)
+        profileRepository.updateProfile(profile)
         
         withContext(Dispatchers.Main) {
-            uiState = uiState.copy(profiles = profileManager.getProfiles())
+            uiState = uiState.copy(profiles = profileRepository.getProfiles())
         }
         
         return@withContext contentChanged && XrayVpnService.isServiceRunning && XrayVpnService.runningProfileId == profile.id
@@ -378,16 +338,16 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun deleteProfiles(ids: Set<String>) {
         viewModelScope.launch {
             withContext(Dispatchers.IO) {
-                profileManager.deleteProfiles(ids)
+                profileRepository.deleteProfiles(ids)
             }
             uiState = uiState.copy(
-                profiles = profileManager.getProfiles(),
-                selectedProfileId = profileManager.getSelectedProfileId()
+                profiles = profileRepository.getProfiles(),
+                selectedProfileId = profileRepository.getSelectedProfileId()
             )
         }
     }
 
-    fun getProfileContent(profile: Profile): String = profileManager.getProfileContent(profile) ?: ""
+    fun getProfileContent(profile: Profile): String = profileRepository.getProfileContent(profile) ?: ""
 
     fun setDeepLinkProfile(profile: PendingProfile?) {
         uiState = uiState.copy(deepLinkProfile = profile)
@@ -485,34 +445,34 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         }
                     } else {
                         if (p.isRemote && p.url != null) {
-                            profileManager.addRemoteProfile(p.name, p.url, p.autoUpdateEnabled, p.autoUpdateIntervalMinutes)
+                            profileRepository.addRemoteProfile(p.name, p.url, p.autoUpdateEnabled, p.autoUpdateIntervalMinutes)
                         } else if (payload.profileContent != null) {
                             withContext(Dispatchers.IO) {
-                                profileManager.saveLocalProfile(p.name, payload.profileContent)
+                                profileRepository.saveLocalProfile(p.name, payload.profileContent)
                             }
                         }
                     }
                 } else if (payload.group != null) {
                     val g = payload.group
-                    val groups = profileManager.getGroups().toMutableList()
+                    val groups = profileRepository.getGroups().toMutableList()
                     val targetGroupId = if (groups.any { it.name == g.name }) {
                         groups.find { it.name == g.name }?.id ?: g.id
                     } else {
                         val newG = g.copy(id = java.util.UUID.randomUUID().toString())
                         groups.add(newG)
-                        profileManager.saveGroups(groups)
+                        profileRepository.saveGroups(groups)
                         newG.id
                     }
                     
                     payload.groupProfiles?.forEach { (profile, content) ->
                         if (profile.isRemote && profile.url != null) {
-                             profileManager.addRemoteProfile(profile.name, profile.url, profile.autoUpdateEnabled, profile.autoUpdateIntervalMinutes, targetGroupId)
+                             profileRepository.addRemoteProfile(profile.name, profile.url, profile.autoUpdateEnabled, profile.autoUpdateIntervalMinutes, targetGroupId)
                         } else if (content != null) {
-                            profileManager.saveLocalProfile(profile.name, content, targetGroupId)
+                            profileRepository.saveLocalProfile(profile.name, content, targetGroupId)
                         }
                     }
                 }
-                uiState = uiState.copy(groups = profileManager.getGroups(), profiles = profileManager.getProfiles())
+                uiState = uiState.copy(groups = profileRepository.getGroups(), profiles = profileRepository.getProfiles())
                 LogManager.addLog("[App] P2P payload accepted")
                 _events.emit(MainUiEvent.ShowToast(messageResId = R.string.p2p_processed, formatArgs = listOf("Profile/Group")))
             } catch (e: Exception) {
@@ -531,7 +491,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             try {
                 val content = if (!profile.isRemote) {
                     withContext(Dispatchers.IO) {
-                        profileManager.getProfileContent(profile)
+                        profileRepository.getProfileContent(profile)
                     }
                 } else null
                 
@@ -563,7 +523,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 val groupProfiles = profiles.map { profile ->
                     val content = if (!profile.isRemote) {
                         withContext(Dispatchers.IO) {
-                            profileManager.getProfileContent(profile)
+                            profileRepository.getProfileContent(profile)
                         }
                     } else null
                     profile to content

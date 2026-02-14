@@ -4,12 +4,9 @@ import android.content.Intent
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.ExperimentalFoundationApi
-import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.MoreVert
@@ -17,16 +14,15 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.oklookat.spectra.MainViewModel
 import com.oklookat.spectra.R
 import com.oklookat.spectra.model.Group
 import com.oklookat.spectra.model.Profile
+import com.oklookat.spectra.ui.components.*
+import com.oklookat.spectra.ui.viewmodel.MainViewModel
 import com.oklookat.spectra.util.TvUtils
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -79,145 +75,57 @@ fun ProfilesScreen(viewModel: MainViewModel = viewModel()) {
 
     Scaffold(
         topBar = {
-            Column {
-                if (isSelectionMode) {
-                    TopAppBar(
-                        title = { Text(stringResource(R.string.selected_count, selectedIds.size)) },
-                        navigationIcon = {
-                            IconButton(onClick = { selectedIds = emptySet() }) {
-                                Icon(Icons.Default.Close, contentDescription = null)
-                            }
-                        },
-                        actions = {
-                            IconButton(onClick = {
-                                viewModel.deleteProfiles(selectedIds)
-                                selectedIds = emptySet()
-                            }) {
-                                Icon(Icons.Default.Delete, contentDescription = stringResource(R.string.delete))
-                            }
-                        }
-                    )
-                } else {
-                    TopAppBar(
-                        title = { Text(stringResource(R.string.profiles)) },
-                        actions = {
-                            if (selectedGroup != null) {
-                                Box {
-                                    IconButton(onClick = { showGroupMenu = true }) {
-                                        Icon(Icons.Default.MoreVert, contentDescription = "Group Actions")
-                                    }
-                                    DropdownMenu(
-                                        expanded = showGroupMenu,
-                                        onDismissRequest = { showGroupMenu = false }
-                                    ) {
-                                        if (!isTv) {
-                                            DropdownMenuItem(
-                                                text = { Text(stringResource(R.string.share_group)) },
-                                                leadingIcon = { Icon(Icons.Default.Share, contentDescription = null) },
-                                                onClick = {
-                                                    showGroupMenu = false
-                                                    groupToSend = selectedGroup
-                                                    showScanner = true
-                                                }
-                                            )
-                                            if (!selectedGroup.url.isNullOrBlank()) {
-                                                DropdownMenuItem(
-                                                    text = { Text(stringResource(R.string.share_source_url)) },
-                                                    leadingIcon = { Icon(Icons.Default.Link, contentDescription = null) },
-                                                    onClick = {
-                                                        showGroupMenu = false
-                                                        val sendIntent: Intent = Intent().apply {
-                                                            action = Intent.ACTION_SEND
-                                                            putExtra(Intent.EXTRA_TEXT, selectedGroup.url)
-                                                            type = "text/plain"
-                                                        }
-                                                        val shareIntent = Intent.createChooser(sendIntent, null)
-                                                        context.startActivity(shareIntent)
-                                                    }
-                                                )
-                                            }
-                                        }
-                                        if (selectedGroup.id != Group.DEFAULT_GROUP_ID) {
-                                            DropdownMenuItem(
-                                                text = { Text(stringResource(R.string.edit_group)) },
-                                                leadingIcon = { Icon(Icons.Default.Edit, contentDescription = null) },
-                                                onClick = {
-                                                    showGroupMenu = false
-                                                    editingGroup = selectedGroup
-                                                    showGroupDialog = true
-                                                }
-                                            )
-                                            if (selectedGroup.isRemote) {
-                                                DropdownMenuItem(
-                                                    text = { Text(stringResource(R.string.refresh)) },
-                                                    leadingIcon = { Icon(Icons.Default.Refresh, contentDescription = null) },
-                                                    onClick = {
-                                                        showGroupMenu = false
-                                                        viewModel.refreshGroup(selectedGroup)
-                                                    }
-                                                )
-                                            }
-                                            HorizontalDivider()
-                                            DropdownMenuItem(
-                                                text = { Text(stringResource(R.string.delete_group)) },
-                                                leadingIcon = { Icon(Icons.Default.Delete, contentDescription = null) },
-                                                onClick = {
-                                                    showGroupMenu = false
-                                                    viewModel.deleteGroup(selectedGroup.id)
-                                                },
-                                                colors = MenuDefaults.itemColors(
-                                                    textColor = MaterialTheme.colorScheme.error,
-                                                    leadingIconColor = MaterialTheme.colorScheme.error
-                                                )
-                                            )
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    )
-                }
-
-                ScrollableTabRow(
-                    selectedTabIndex = selectedGroupIndex,
-                    edgePadding = 16.dp,
-                    divider = {},
-                    containerColor = MaterialTheme.colorScheme.surface
-                ) {
-                    Tab(
-                        selected = selectedGroupIndex == 0,
-                        onClick = { selectedGroupIndex = 0 },
-                        text = { Text(stringResource(R.string.all)) }
-                    )
-                    uiState.groups.forEachIndexed { index, group ->
-                        Tab(
-                            selected = selectedGroupIndex == index + 1,
-                            onClick = { selectedGroupIndex = index + 1 },
-                            text = { 
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    if (group.isRemote) {
-                                        Icon(Icons.Default.Cloud, contentDescription = null, modifier = Modifier.size(16.dp))
-                                        Spacer(Modifier.width(4.dp))
-                                    }
-                                    Text(group.name)
-                                }
-                            }
-                        )
-                    }
-                    IconButton(onClick = { 
-                        editingGroup = null
-                        showGroupDialog = true 
-                    }) {
-                        Icon(Icons.Default.Add, contentDescription = stringResource(R.string.add_group))
-                    }
-                }
-            }
+            ProfilesTopBar(
+                isSelectionMode = isSelectionMode,
+                selectedCount = selectedIds.size,
+                selectedGroup = selectedGroup,
+                groups = uiState.groups,
+                selectedGroupIndex = selectedGroupIndex,
+                isTv = isTv,
+                onClearSelection = { selectedIds = emptySet() },
+                onDeleteSelection = {
+                    viewModel.deleteProfiles(selectedIds)
+                    selectedIds = emptySet()
+                },
+                onGroupClick = { selectedGroupIndex = it },
+                onAddGroupClick = {
+                    editingGroup = null
+                    showGroupDialog = true
+                },
+                onGroupMenuClick = { showGroupMenu = true },
+                onShowGroupMenu = showGroupMenu,
+                onDismissGroupMenu = { showGroupMenu = false },
+                onShareGroup = {
+                    groupToSend = selectedGroup
+                    showScanner = true
+                },
+                onEditGroup = {
+                    editingGroup = selectedGroup
+                    showGroupDialog = true
+                },
+                onRefreshGroup = { viewModel.refreshGroup(selectedGroup!!) },
+                onDeleteGroup = { viewModel.deleteGroup(selectedGroup!!.id) }
+            )
         },
         floatingActionButton = {
             if (!isSelectionMode && (selectedGroup == null || !selectedGroup.isRemote)) {
-                FloatingActionButton(onClick = { showMenu = true }) {
-                    Icon(Icons.Filled.Add, contentDescription = stringResource(R.string.add_profile))
-                }
+                ProfilesFab(
+                    onShowMenu = { showMenu = true },
+                    showMenu = showMenu,
+                    onDismissMenu = { showMenu = false },
+                    onRefreshAll = { viewModel.refreshRemoteProfiles() },
+                    onP2PReceive = { viewModel.startP2PServer() },
+                    onAddRemote = {
+                        editingProfile = null
+                        showRemoteDialog = true
+                    },
+                    onImportFile = { filePicker.launch("application/json") },
+                    onAddManual = {
+                        editingProfile = null
+                        importedContent = ""
+                        showLocalDialog = true
+                    }
+                )
             }
         }
     ) { padding ->
@@ -285,59 +193,6 @@ fun ProfilesScreen(viewModel: MainViewModel = viewModel()) {
                     modifier = Modifier.align(Alignment.Center),
                     style = MaterialTheme.typography.bodyLarge
                 )
-            }
-
-            // Dropdown Menu for Adding Profiles
-            Box(modifier = Modifier.align(Alignment.BottomEnd).padding(16.dp)) {
-                DropdownMenu(
-                    expanded = showMenu,
-                    onDismissRequest = { showMenu = false }
-                ) {
-                    DropdownMenuItem(
-                        text = { Text(stringResource(R.string.refresh_all_remote)) },
-                        leadingIcon = { Icon(Icons.Default.Refresh, contentDescription = null) },
-                        onClick = {
-                            showMenu = false
-                            viewModel.refreshRemoteProfiles()
-                        }
-                    )
-                    HorizontalDivider()
-                    DropdownMenuItem(
-                        text = { Text(stringResource(R.string.p2p_receive)) },
-                        leadingIcon = { Icon(Icons.Default.QrCode, contentDescription = null) },
-                        onClick = {
-                            showMenu = false
-                            viewModel.startP2PServer()
-                        }
-                    )
-                    DropdownMenuItem(
-                        text = { Text(stringResource(R.string.remote)) },
-                        leadingIcon = { Icon(Icons.Default.CloudDownload, contentDescription = null) },
-                        onClick = {
-                            showMenu = false
-                            editingProfile = null
-                            showRemoteDialog = true
-                        }
-                    )
-                    DropdownMenuItem(
-                        text = { Text(stringResource(R.string.import_from_file)) },
-                        leadingIcon = { Icon(Icons.Default.FileOpen, contentDescription = null) },
-                        onClick = {
-                            showMenu = false
-                            filePicker.launch("application/json")
-                        }
-                    )
-                    DropdownMenuItem(
-                        text = { Text(stringResource(R.string.manual_local)) },
-                        leadingIcon = { Icon(Icons.Default.EditNote, contentDescription = null) },
-                        onClick = {
-                            showMenu = false
-                            editingProfile = null
-                            importedContent = ""
-                            showLocalDialog = true
-                        }
-                    )
-                }
             }
         }
     }
@@ -448,322 +303,216 @@ fun ProfilesScreen(viewModel: MainViewModel = viewModel()) {
     }
 }
 
-@OptIn(ExperimentalFoundationApi::class)
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ProfileItem(
-    profile: Profile,
-    isSelectedForDeletion: Boolean,
-    isActive: Boolean,
+private fun ProfilesTopBar(
+    isSelectionMode: Boolean,
+    selectedCount: Int,
+    selectedGroup: Group?,
+    groups: List<Group>,
+    selectedGroupIndex: Int,
     isTv: Boolean,
-    onLongClick: () -> Unit,
-    onClick: () -> Unit,
-    onEditClick: () -> Unit,
-    onRefreshClick: () -> Unit,
-    onShareP2PClick: () -> Unit,
-    onDeleteClick: () -> Unit
+    onClearSelection: () -> Unit,
+    onDeleteSelection: () -> Unit,
+    onGroupClick: (Int) -> Unit,
+    onAddGroupClick: () -> Unit,
+    onGroupMenuClick: () -> Unit,
+    onShowGroupMenu: Boolean,
+    onDismissGroupMenu: () -> Unit,
+    onShareGroup: () -> Unit,
+    onEditGroup: () -> Unit,
+    onRefreshGroup: () -> Unit,
+    onDeleteGroup: () -> Unit
 ) {
-    var showItemMenu by remember { mutableStateOf(false) }
-
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .combinedClickable(
-                onClick = onClick,
-                onLongClick = onLongClick
-            ),
-        colors = CardDefaults.cardColors(
-            containerColor = when {
-                isSelectedForDeletion -> MaterialTheme.colorScheme.primaryContainer
-                isActive -> MaterialTheme.colorScheme.secondaryContainer
-                else -> MaterialTheme.colorScheme.surfaceVariant
-            }
-        ),
-        border = if (isActive) CardDefaults.outlinedCardBorder().copy(
-            brush = androidx.compose.ui.graphics.SolidColor(MaterialTheme.colorScheme.primary)
-        ) else null
-    ) {
-        Row(
-            modifier = Modifier.padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Icon(
-                imageVector = if (profile.isRemote) Icons.Default.Cloud else Icons.Default.Description, 
-                contentDescription = null,
-                tint = if (isActive) MaterialTheme.colorScheme.primary else LocalContentColor.current
+    val context = LocalContext.current
+    
+    Column {
+        if (isSelectionMode) {
+            TopAppBar(
+                title = { Text(stringResource(R.string.selected_count, selectedCount)) },
+                navigationIcon = {
+                    IconButton(onClick = onClearSelection) {
+                        Icon(Icons.Default.Close, contentDescription = null)
+                    }
+                },
+                actions = {
+                    IconButton(onClick = onDeleteSelection) {
+                        Icon(Icons.Default.Delete, contentDescription = stringResource(R.string.delete))
+                    }
+                }
             )
-            Spacer(modifier = Modifier.width(16.dp))
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = profile.name, 
-                    style = MaterialTheme.typography.titleMedium,
-                    color = if (isActive) MaterialTheme.colorScheme.primary else Color.Unspecified
+        } else {
+            TopAppBar(
+                title = { Text(stringResource(R.string.profiles)) },
+                actions = {
+                    if (selectedGroup != null) {
+                        Box {
+                            IconButton(onClick = onGroupMenuClick) {
+                                Icon(Icons.Default.MoreVert, contentDescription = "Group Actions")
+                            }
+                            DropdownMenu(
+                                expanded = onShowGroupMenu,
+                                onDismissRequest = onDismissGroupMenu
+                            ) {
+                                if (!isTv) {
+                                    DropdownMenuItem(
+                                        text = { Text(stringResource(R.string.share_group)) },
+                                        leadingIcon = { Icon(Icons.Default.Share, contentDescription = null) },
+                                        onClick = {
+                                            onDismissGroupMenu()
+                                            onShareGroup()
+                                        }
+                                    )
+                                    if (!selectedGroup.url.isNullOrBlank()) {
+                                        DropdownMenuItem(
+                                            text = { Text(stringResource(R.string.share_source_url)) },
+                                            leadingIcon = { Icon(Icons.Default.Link, contentDescription = null) },
+                                            onClick = {
+                                                onDismissGroupMenu()
+                                                val sendIntent: Intent = Intent().apply {
+                                                    action = Intent.ACTION_SEND
+                                                    putExtra(Intent.EXTRA_TEXT, selectedGroup.url)
+                                                    type = "text/plain"
+                                                }
+                                                val shareIntent = Intent.createChooser(sendIntent, null)
+                                                context.startActivity(shareIntent)
+                                            }
+                                        )
+                                    }
+                                }
+                                if (selectedGroup.id != Group.DEFAULT_GROUP_ID) {
+                                    DropdownMenuItem(
+                                        text = { Text(stringResource(R.string.edit_group)) },
+                                        leadingIcon = { Icon(Icons.Default.Edit, contentDescription = null) },
+                                        onClick = {
+                                            onDismissGroupMenu()
+                                            onEditGroup()
+                                        }
+                                    )
+                                    if (selectedGroup.isRemote) {
+                                        DropdownMenuItem(
+                                            text = { Text(stringResource(R.string.refresh)) },
+                                            leadingIcon = { Icon(Icons.Default.Refresh, contentDescription = null) },
+                                            onClick = {
+                                                onDismissGroupMenu()
+                                                onRefreshGroup()
+                                            }
+                                        )
+                                    }
+                                    HorizontalDivider()
+                                    DropdownMenuItem(
+                                        text = { Text(stringResource(R.string.delete_group)) },
+                                        leadingIcon = { Icon(Icons.Default.Delete, contentDescription = null) },
+                                        onClick = {
+                                            onDismissGroupMenu()
+                                            onDeleteGroup()
+                                        },
+                                        colors = MenuDefaults.itemColors(
+                                            textColor = MaterialTheme.colorScheme.error,
+                                            leadingIconColor = MaterialTheme.colorScheme.error
+                                        )
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            )
+        }
+
+        ScrollableTabRow(
+            selectedTabIndex = selectedGroupIndex,
+            edgePadding = 16.dp,
+            divider = {},
+            containerColor = MaterialTheme.colorScheme.surface
+        ) {
+            Tab(
+                selected = selectedGroupIndex == 0,
+                onClick = { onGroupClick(0) },
+                text = { Text(stringResource(R.string.all)) }
+            )
+            groups.forEachIndexed { index, group ->
+                Tab(
+                    selected = selectedGroupIndex == index + 1,
+                    onClick = { onGroupClick(index + 1) },
+                    text = { 
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            if (group.isRemote) {
+                                Icon(Icons.Default.Cloud, contentDescription = null, modifier = Modifier.size(16.dp))
+                                Spacer(Modifier.width(4.dp))
+                            }
+                            Text(group.name)
+                        }
+                    }
                 )
-                if (profile.isRemote && !profile.url.isNullOrEmpty()) {
-                    Text(
-                        text = profile.url,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1
-                    )
-                }
             }
-            if (isActive) {
-                Icon(
-                    Icons.Default.CheckCircle, 
-                    contentDescription = stringResource(R.string.active),
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.padding(horizontal = 8.dp)
-                )
-            }
-            
-            Box {
-                IconButton(onClick = { showItemMenu = true }) {
-                    Icon(Icons.Outlined.MoreVert, contentDescription = "More")
-                }
-                DropdownMenu(
-                    expanded = showItemMenu,
-                    onDismissRequest = { showItemMenu = false }
-                ) {
-                    if (!profile.isImported) {
-                        DropdownMenuItem(
-                            text = { Text(stringResource(R.string.edit)) },
-                            leadingIcon = { Icon(Icons.Default.Edit, contentDescription = null) },
-                            onClick = {
-                                showItemMenu = false
-                                onEditClick()
-                            }
-                        )
-                    }
-                    if (profile.isRemote && !profile.isImported) {
-                        DropdownMenuItem(
-                            text = { Text(stringResource(R.string.refresh)) },
-                            leadingIcon = { Icon(Icons.Default.Refresh, contentDescription = null) },
-                            onClick = {
-                                showItemMenu = false
-                                onRefreshClick()
-                            }
-                        )
-                    }
-                    if (!isTv) {
-                        DropdownMenuItem(
-                            text = { Text(stringResource(R.string.p2p_share)) },
-                            leadingIcon = { Icon(Icons.Default.Share, contentDescription = null) },
-                            onClick = {
-                                showItemMenu = false
-                                onShareP2PClick()
-                            }
-                        )
-                    }
-                    HorizontalDivider()
-                    DropdownMenuItem(
-                        text = { Text(stringResource(R.string.delete)) },
-                        leadingIcon = { Icon(Icons.Default.Delete, contentDescription = null) },
-                        onClick = {
-                            showItemMenu = false
-                            onDeleteClick()
-                        },
-                        colors = MenuDefaults.itemColors(
-                            textColor = MaterialTheme.colorScheme.error,
-                            leadingIconColor = MaterialTheme.colorScheme.error
-                        )
-                    )
-                }
+            IconButton(onClick = onAddGroupClick) {
+                Icon(Icons.Default.Add, contentDescription = stringResource(R.string.add_group))
             }
         }
     }
 }
 
 @Composable
-fun GroupDialog(
-    group: Group? = null,
-    onDismiss: () -> Unit,
-    onConfirm: (String, String?, Boolean, Int) -> Unit,
-    isNameUnique: (String) -> Boolean
+private fun ProfilesFab(
+    onShowMenu: () -> Unit,
+    showMenu: Boolean,
+    onDismissMenu: () -> Unit,
+    onRefreshAll: () -> Unit,
+    onP2PReceive: () -> Unit,
+    onAddRemote: () -> Unit,
+    onImportFile: () -> Unit,
+    onAddManual: () -> Unit
 ) {
-    var name by remember { mutableStateOf(group?.name ?: "") }
-    var url by remember { mutableStateOf(group?.url ?: "") }
-    var autoUpdate by remember { mutableStateOf(group?.autoUpdateEnabled ?: false) }
-    var interval by remember { mutableStateOf(group?.autoUpdateIntervalMinutes?.toString() ?: "15") }
-
-    val isNameValid = name.isNotBlank() && (group != null || isNameUnique(name))
-    val isUrlValid = url.isBlank() || url.startsWith("http")
-    val isIntervalValid = (interval.toIntOrNull() ?: 0) >= 15
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(if (group == null) stringResource(R.string.add_group) else stringResource(R.string.edit_group)) },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                TextField(
-                    value = name,
-                    onValueChange = { name = it },
-                    label = { Text(stringResource(R.string.name)) },
-                    isError = !isNameValid && name.isNotEmpty(),
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
-                )
-                TextField(
-                    value = url,
-                    onValueChange = { url = it },
-                    label = { Text(stringResource(R.string.url_optional_remote)) },
-                    isError = !isUrlValid && url.isNotEmpty(),
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
-                )
-                if (url.isNotBlank()) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(stringResource(R.string.auto_update))
-                        Spacer(modifier = Modifier.weight(1f))
-                        Switch(checked = autoUpdate, onCheckedChange = { autoUpdate = it })
-                    }
-                    if (autoUpdate) {
-                        TextField(
-                            value = interval,
-                            onValueChange = { if (it.all { char -> char.isDigit() }) interval = it },
-                            label = { Text(stringResource(R.string.interval_minutes)) },
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                            isError = !isIntervalValid,
-                            singleLine = true,
-                            modifier = Modifier.fillMaxWidth()
-                        )
-                    }
-                }
-            }
-        },
-        confirmButton = {
-            Button(
-                onClick = { onConfirm(name, url.ifBlank { null }, autoUpdate, interval.toIntOrNull() ?: 15) },
-                enabled = isNameValid && isUrlValid && (!autoUpdate || isIntervalValid)
-            ) {
-                Text(if (group == null) stringResource(R.string.add) else stringResource(R.string.save))
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) }
+    Box {
+        FloatingActionButton(onClick = onShowMenu) {
+            Icon(Icons.Filled.Add, contentDescription = stringResource(R.string.add_profile))
         }
-    )
-}
-
-@Composable
-fun RemoteProfileDialog(
-    profile: Profile? = null,
-    onDismiss: () -> Unit,
-    onConfirm: (String, String, Boolean, Int) -> Unit,
-    isNameUnique: (String) -> Boolean
-) {
-    var name by remember { mutableStateOf(profile?.name ?: "") }
-    var url by remember { mutableStateOf(profile?.url ?: "") }
-    var autoUpdate by remember { mutableStateOf(profile?.autoUpdateEnabled ?: false) }
-    var interval by remember { mutableStateOf(profile?.autoUpdateIntervalMinutes?.toString() ?: "15") }
-
-    val isNameValid = name.isNotBlank() && (profile != null || isNameUnique(name))
-    val isUrlValid = url.isNotBlank()
-    val isIntervalValid = (interval.toIntOrNull() ?: 0) >= 15
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(if (profile == null) stringResource(R.string.add_remote_profile) else stringResource(R.string.edit_remote_profile)) },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                TextField(
-                    value = name,
-                    onValueChange = { name = it },
-                    label = { Text(stringResource(R.string.name)) },
-                    isError = !isNameValid && name.isNotEmpty(),
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
-                )
-                TextField(
-                    value = url,
-                    onValueChange = { url = it },
-                    label = { Text(stringResource(R.string.url)) },
-                    isError = !isUrlValid && url.isNotEmpty(),
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
-                )
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(stringResource(R.string.auto_update))
-                    Spacer(modifier = Modifier.weight(1f))
-                    Switch(checked = autoUpdate, onCheckedChange = { autoUpdate = it })
+        DropdownMenu(
+            expanded = showMenu,
+            onDismissRequest = onDismissMenu
+        ) {
+            DropdownMenuItem(
+                text = { Text(stringResource(R.string.refresh_all_remote)) },
+                leadingIcon = { Icon(Icons.Default.Refresh, contentDescription = null) },
+                onClick = {
+                    onDismissMenu()
+                    onRefreshAll()
                 }
-                if (autoUpdate) {
-                    TextField(
-                        value = interval,
-                        onValueChange = { if (it.all { char -> char.isDigit() }) interval = it },
-                        label = { Text(stringResource(R.string.interval_minutes)) },
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                        isError = !isIntervalValid,
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth()
-                    )
+            )
+            HorizontalDivider()
+            DropdownMenuItem(
+                text = { Text(stringResource(R.string.p2p_receive)) },
+                leadingIcon = { Icon(Icons.Default.QrCode, contentDescription = null) },
+                onClick = {
+                    onDismissMenu()
+                    onP2PReceive()
                 }
-            }
-        },
-        confirmButton = {
-            Button(
-                onClick = { onConfirm(name, url, autoUpdate, interval.toIntOrNull() ?: 15) },
-                enabled = isNameValid && isUrlValid && (!autoUpdate || isIntervalValid)
-            ) {
-                Text(if (profile == null) stringResource(R.string.add) else stringResource(R.string.save))
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) }
+            )
+            DropdownMenuItem(
+                text = { Text(stringResource(R.string.remote)) },
+                leadingIcon = { Icon(Icons.Default.CloudDownload, contentDescription = null) },
+                onClick = {
+                    onDismissMenu()
+                    onAddRemote()
+                }
+            )
+            DropdownMenuItem(
+                text = { Text(stringResource(R.string.import_from_file)) },
+                leadingIcon = { Icon(Icons.Default.FileOpen, contentDescription = null) },
+                onClick = {
+                    onDismissMenu()
+                    onImportFile()
+                }
+            )
+            DropdownMenuItem(
+                text = { Text(stringResource(R.string.manual_local)) },
+                leadingIcon = { Icon(Icons.Default.EditNote, contentDescription = null) },
+                onClick = {
+                    onDismissMenu()
+                    onAddManual()
+                }
+            )
         }
-    )
-}
-
-@Composable
-fun LocalProfileDialog(
-    profile: Profile? = null,
-    initialContent: String = "",
-    onDismiss: () -> Unit,
-    onConfirm: (String, String) -> Unit,
-    isNameUnique: (String) -> Boolean
-) {
-    var name by remember { mutableStateOf(profile?.name ?: "") }
-    var content by remember { mutableStateOf(initialContent) }
-
-    LaunchedEffect(initialContent) {
-        if (initialContent.isNotEmpty()) content = initialContent
     }
-
-    val isNameValid = name.isNotBlank() && (profile != null || isNameUnique(name))
-    val isContentValid = content.isNotBlank()
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(if (profile == null) stringResource(R.string.add_local_profile) else stringResource(R.string.edit_local_profile)) },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                TextField(
-                    value = name,
-                    onValueChange = { name = it },
-                    label = { Text(stringResource(R.string.name)) },
-                    isError = !isNameValid && name.isNotEmpty(),
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
-                )
-                TextField(
-                    value = content,
-                    onValueChange = { content = it },
-                    label = { Text(stringResource(R.string.configuration_json)) },
-                    isError = !isContentValid && content.isNotEmpty(),
-                    modifier = Modifier.fillMaxWidth().heightIn(min = 100.dp, max = 300.dp),
-                    maxLines = 15
-                )
-            }
-        },
-        confirmButton = {
-            Button(
-                onClick = { onConfirm(name, content) },
-                enabled = isNameValid && isContentValid
-            ) {
-                Text(if (profile == null) stringResource(R.string.add) else stringResource(R.string.save))
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) }
-        }
-    )
 }

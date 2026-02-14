@@ -1,4 +1,4 @@
-package com.oklookat.spectra
+package com.oklookat.spectra.service
 
 import android.app.Notification
 import android.app.NotificationChannel
@@ -10,15 +10,15 @@ import android.content.pm.ServiceInfo
 import android.net.VpnService
 import android.os.Binder
 import android.os.Build
-import android.os.Handler
 import android.os.IBinder
-import android.os.Looper
 import android.os.ParcelFileDescriptor
 import android.util.Base64
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
 import androidx.core.content.ContextCompat
+import com.oklookat.spectra.MainActivity
+import com.oklookat.spectra.R
 import com.oklookat.spectra.util.LogManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -36,7 +36,9 @@ import java.io.File
 import java.io.FileOutputStream
 import java.io.InputStreamReader
 import java.security.SecureRandom
+import java.util.concurrent.locks.ReentrantLock
 import kotlin.concurrent.thread
+import kotlin.concurrent.withLock
 
 class XrayVpnService : VpnService() {
 
@@ -46,6 +48,7 @@ class XrayVpnService : VpnService() {
 
     private val binder = ServiceBinder()
     private val serviceScope = CoroutineScope(Dispatchers.Main + SupervisorJob())
+    private val lifecycleLock = ReentrantLock()
 
     companion object {
         private const val TAG = "XrayVpnService"
@@ -108,8 +111,12 @@ class XrayVpnService : VpnService() {
         serviceScope.launch {
             withContext(Dispatchers.IO) {
                 copyAssetsToFilesDir()
-                val key = generateRandom32ByteKey()
-                Libv2ray.initCoreEnv(filesDir.absolutePath, key)
+                try {
+                    val key = generateRandom32ByteKey()
+                    Libv2ray.initCoreEnv(filesDir.absolutePath, key)
+                } catch (e: Exception) {
+                    Log.e(TAG, "Failed to init core env", e)
+                }
             }
         }
     }
@@ -124,53 +131,133 @@ class XrayVpnService : VpnService() {
         val profileId = intent?.getStringExtra("PROFILE_ID")
 
         serviceScope.launch {
-            if (configJson.isEmpty() && withContext(Dispatchers.IO) { loadConfigFromAssets().isEmpty() }) {
+            val config = if (configJson.isEmpty()) {
+                withContext(Dispatchers.IO) { loadConfigFromAssets() }
+            } else configJson
+
+            if (config.isEmpty()) {
                 Log.e(TAG, "No config found, stopping service")
                 stopVpn()
                 return@launch
             }
 
-            _isRunning.value = true
-
-            if (coreController != null) {
-                Log.d(TAG, "Core already running, stopping existing core for restart")
-                withContext(Dispatchers.IO) { stopCore() }
-            }
-
-            runningProfileId = profileId
-
-            val enableIpv6 = intent?.getBooleanExtra("ENABLE_IPV6", false) ?: false
-            val vpnAddress = intent?.getStringExtra("VPN_ADDRESS") ?: "10.0.0.1"
-            val vpnDns = intent?.getStringExtra("VPN_DNS") ?: "10.0.0.2"
-            val vpnAddressIpv6 = intent?.getStringExtra("VPN_ADDRESS_IPV6") ?: "fd00::1"
-            val vpnDnsIpv6 = intent?.getStringExtra("VPN_DNS_IPV6") ?: "fd00::2"
-            val vpnMtu = intent?.getIntExtra("VPN_MTU", 9000) ?: 9000
-
-            if (logcatProcess == null) {
-                startLogcatCapture()
-            }
-
-            setupVpn(
-                configJson = configJson.ifEmpty { withContext(Dispatchers.IO) { loadConfigFromAssets() } },
-                enableIpv6 = enableIpv6,
-                vpnAddress = vpnAddress,
-                vpnDns = vpnDns,
-                vpnAddressIpv6 = vpnAddressIpv6,
-                vpnDnsIpv6 = vpnDnsIpv6,
-                vpnMtu = vpnMtu
+            val vpnParams = VpnParams(
+                enableIpv6 = intent?.getBooleanExtra("ENABLE_IPV6", false) ?: false,
+                vpnAddress = intent?.getStringExtra("VPN_ADDRESS") ?: "10.0.0.1",
+                vpnDns = intent?.getStringExtra("VPN_DNS") ?: "10.0.0.2",
+                vpnAddressIpv6 = intent?.getStringExtra("VPN_ADDRESS_IPV6") ?: "fd00::1",
+                vpnDnsIpv6 = intent?.getStringExtra("VPN_DNS_IPV6") ?: "fd00::2",
+                vpnMtu = intent?.getIntExtra("VPN_MTU", 9000) ?: 9000
             )
+
+            withContext(Dispatchers.IO) {
+                lifecycleLock.withLock {
+                    runningProfileId = profileId
+                    startVpnLocked(config, vpnParams)
+                }
+            }
         }
 
         return START_NOT_STICKY
+    }
+
+    private data class VpnParams(
+        val enableIpv6: Boolean,
+        val vpnAddress: String,
+        val vpnDns: String,
+        val vpnAddressIpv6: String,
+        val vpnDnsIpv6: String,
+        val vpnMtu: Int
+    )
+
+    private fun startVpnLocked(configJson: String, params: VpnParams) {
+        // Stop previous instance if running
+        stopCoreLocked()
+        closeVpnInterfaceLocked()
+
+        if (logcatProcess == null) {
+            startLogcatCapture()
+        }
+
+        try {
+            val builder = Builder()
+                .addAddress(params.vpnAddress, 32)
+                .addRoute("0.0.0.0", 0)
+                .addDnsServer(params.vpnDns)
+                .setMtu(params.vpnMtu)
+                .setSession("Spectra Xray")
+                .addDisallowedApplication(packageName)
+
+            if (params.enableIpv6) {
+                builder.addAddress(params.vpnAddressIpv6, 128)
+                builder.addRoute("::", 0)
+                builder.addDnsServer(params.vpnDnsIpv6)
+            }
+
+            vpnInterface = builder.establish()
+
+            val pfd = vpnInterface
+            if (pfd == null) {
+                Log.e(TAG, "Failed to establish VPN interface")
+                return
+            }
+
+            val notification = buildNotification()
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                ServiceCompat.startForeground(
+                    this,
+                    NOTIFICATION_ID,
+                    notification,
+                    ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE
+                )
+            } else {
+                startForeground(NOTIFICATION_ID, notification)
+            }
+
+            val fd = pfd.fd
+            val callback = object : CoreCallbackHandler {
+                override fun onEmitStatus(p0: Long, p1: String?): Long {
+                    if (!p1.isNullOrBlank()) {
+                        LogManager.addLog("[Core] $p1")
+                    }
+                    return 0
+                }
+                override fun shutdown(): Long = 0
+                override fun startup(): Long = 0
+            }
+
+            coreController = Libv2ray.newCoreController(callback)
+            
+            thread(start = true, name = "XrayThread") {
+                try {
+                    coreController?.startLoop(configJson, fd)
+                } catch (e: Exception) {
+                    Log.e(TAG, "Core loop error", e)
+                } finally {
+                    Log.d(TAG, "Core loop finished")
+                }
+            }
+            
+            _isRunning.value = true
+        } catch (e: Exception) {
+            Log.e(TAG, "VPN setup failed", e)
+            lifecycleLock.withLock {
+                stopCoreLocked()
+                closeVpnInterfaceLocked()
+            }
+            _isRunning.value = false
+            stopSelf()
+        }
     }
 
     private fun startLogcatCapture() {
         thread(start = true, name = "LogcatThread") {
             try {
                 Runtime.getRuntime().exec("logcat -c").waitFor()
-                logcatProcess = Runtime.getRuntime().exec("logcat GoLog:I *:S")
-                val reader = BufferedReader(InputStreamReader(logcatProcess?.inputStream))
-                while (logcatProcess != null) {
+                val process = Runtime.getRuntime().exec("logcat GoLog:I *:S")
+                logcatProcess = process
+                val reader = BufferedReader(InputStreamReader(process.inputStream))
+                while (true) {
                     val line = reader.readLine() ?: break
                     val message = line.substringAfter("GoLog   : ").trim()
                     if (message.isNotEmpty() && message != line) {
@@ -179,6 +266,9 @@ class XrayVpnService : VpnService() {
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Logcat capture error", e)
+            } finally {
+                logcatProcess?.destroy()
+                logcatProcess = null
             }
         }
     }
@@ -192,120 +282,35 @@ class XrayVpnService : VpnService() {
         }
     }
 
-    private fun setupVpn(
-        configJson: String,
-        enableIpv6: Boolean,
-        vpnAddress: String,
-        vpnDns: String,
-        vpnAddressIpv6: String,
-        vpnDnsIpv6: String,
-        vpnMtu: Int
-    ) {
-        val notification = buildNotification()
-
+    private fun stopCoreLocked() {
         try {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-                ServiceCompat.startForeground(
-                    this,
-                    NOTIFICATION_ID,
-                    notification,
-                    ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE
-                )
-            } else {
-                startForeground(NOTIFICATION_ID, notification)
-            }
+            coreController?.stopLoop()
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to start foreground: ${e.message}")
-            _isRunning.value = false
-            stopSelf()
-            return
+            Log.e(TAG, "Error stopping core loop", e)
         }
-
-        try {
-            val builder = Builder()
-                .addAddress(vpnAddress, 32)
-                .addRoute("0.0.0.0", 0)
-                .addDnsServer(vpnDns)
-                .setMtu(vpnMtu)
-                .setSession("Spectra Xray")
-                .addDisallowedApplication(packageName)
-
-            if (enableIpv6) {
-                builder.addAddress(vpnAddressIpv6, 128)
-                builder.addRoute("::", 0)
-                builder.addDnsServer(vpnDnsIpv6)
-            }
-
-            vpnInterface?.close()
-            vpnInterface = builder.establish()
-
-            vpnInterface?.let { pfd ->
-                val fd = pfd.fd
-                val callback = object : CoreCallbackHandler {
-                    override fun onEmitStatus(p0: Long, p1: String?): Long {
-                        if (!p1.isNullOrBlank()) {
-                            LogManager.addLog("[Core] $p1")
-                        }
-                        return 0
-                    }
-                    override fun shutdown(): Long = 0
-                    override fun startup(): Long = 0
-                }
-
-                thread(start = true, name = "XrayThread") {
-                    try {
-                        synchronized(this) {
-                            if (coreController == null) {
-                                coreController = Libv2ray.newCoreController(callback)
-                            }
-                        }
-                        coreController?.startLoop(configJson, fd)
-                    } catch (e: Exception) {
-                        Log.e(TAG, "Core loop error", e)
-                    } finally {
-                        synchronized(this) { coreController = null }
-                    }
-                }
-            }
-        } catch (e: Exception) {
-            Log.e(TAG, "VPN setup failed", e)
-            _isRunning.value = false
-            stopSelf()
-        }
+        coreController = null
     }
 
-    private fun stopCore() {
-        synchronized(this) {
-            coreController?.let {
-                try {
-                    it.stopLoop()
-                } catch (e: Exception) {
-                    Log.e(TAG, "Error stopping core loop", e)
-                }
-                coreController = null
-            }
+    private fun closeVpnInterfaceLocked() {
+        try {
+            vpnInterface?.close()
+        } catch (e: Exception) {
+            Log.e(TAG, "Error closing VPN interface", e)
         }
+        vpnInterface = null
     }
 
     private fun stopVpn() {
-        if (!_isRunning.value && coreController == null) {
-            stopSelf()
-            return
-        }
-
         serviceScope.launch {
-            runningProfileId = null
-            logcatProcess?.destroy()
-            logcatProcess = null
-
             withContext(Dispatchers.IO) {
-                try {
-                    vpnInterface?.close()
-                } catch (_: Exception) {}
-                vpnInterface = null
-                stopCore()
+                lifecycleLock.withLock {
+                    runningProfileId = null
+                    logcatProcess?.destroy()
+                    logcatProcess = null
+                    stopCoreLocked()
+                    closeVpnInterfaceLocked()
+                }
             }
-
             try {
                 stopForeground(STOP_FOREGROUND_REMOVE)
             } catch (_: Exception) {}
@@ -320,11 +325,6 @@ class XrayVpnService : VpnService() {
     }
 
     override fun onTaskRemoved(rootIntent: Intent?) {
-        stopVpn()
-        Handler(Looper.getMainLooper()).postDelayed({
-            _isRunning.value = false
-            android.os.Process.killProcess(android.os.Process.myPid())
-        }, 500)
         super.onTaskRemoved(rootIntent)
     }
 
@@ -387,10 +387,15 @@ class XrayVpnService : VpnService() {
     }
 
     override fun onDestroy() {
+        lifecycleLock.withLock {
+            stopCoreLocked()
+            closeVpnInterfaceLocked()
+            logcatProcess?.destroy()
+            logcatProcess = null
+        }
         serviceScope.cancel()
         _isRunning.value = false
         runningProfileId = null
-        stopVpn()
         super.onDestroy()
     }
 }

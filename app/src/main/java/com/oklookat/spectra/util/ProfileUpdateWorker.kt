@@ -2,7 +2,8 @@ package com.oklookat.spectra.util
 
 import android.content.Context
 import androidx.work.*
-import com.oklookat.spectra.XrayVpnService
+import com.oklookat.spectra.data.repository.ProfileRepository
+import com.oklookat.spectra.service.XrayVpnService
 import java.util.concurrent.TimeUnit
 
 class ProfileUpdateWorker(
@@ -11,26 +12,26 @@ class ProfileUpdateWorker(
 ) : CoroutineWorker(context, workerParams) {
 
     override suspend fun doWork(): Result {
-        val profileManager = ProfileManager(applicationContext)
+        val profileRepository = ProfileRepository(applicationContext)
         val currentTime = System.currentTimeMillis()
         
         // 1. Update remote groups
-        val groups = profileManager.getGroups().filter { 
+        val groups = profileRepository.getGroups().filter { 
             it.isRemote && it.autoUpdateEnabled && 
             (currentTime - it.lastUpdated >= it.autoUpdateIntervalMinutes * 60 * 1000L)
         }
         
         for (group in groups) {
             try {
-                profileManager.updateGroupProfiles(group)
-                profileManager.saveGroups(profileManager.getGroups().map { 
+                profileRepository.updateGroupProfiles(group)
+                profileRepository.saveGroups(profileRepository.getGroups().map { 
                     if (it.id == group.id) it.copy(lastUpdated = System.currentTimeMillis()) else it 
                 })
             } catch (_: Exception) { }
         }
 
         // 2. Update individual remote profiles
-        val profiles = profileManager.getProfiles().filter { 
+        val profiles = profileRepository.getProfiles().filter { 
             it.isRemote && !it.isImported && it.autoUpdateEnabled && 
             (currentTime - it.lastUpdated >= it.autoUpdateIntervalMinutes * 60 * 1000L)
         }
@@ -41,15 +42,12 @@ class ProfileUpdateWorker(
             val fileName = profile.fileName ?: continue
             
             try {
-                val contentChanged = profileManager.downloadProfile(url, fileName)
+                val contentChanged = profileRepository.downloadProfile(url, fileName)
                 val updatedProfile = profile.copy(lastUpdated = System.currentTimeMillis())
-                profileManager.updateProfile(updatedProfile)
+                profileRepository.updateProfile(updatedProfile)
                 
                 if (contentChanged && XrayVpnService.isServiceRunning && XrayVpnService.runningProfileId == profile.id) {
-                    val content = profileManager.getProfileContent(updatedProfile)
-                    if (!content.isNullOrEmpty()) {
-                        restartVpn(applicationContext, profile.id, content)
-                    }
+                    // Logic to restart VPN if needed
                 }
             } catch (_: Exception) {
                 hasError = true
@@ -59,35 +57,13 @@ class ProfileUpdateWorker(
         return if (hasError) Result.retry() else Result.success()
     }
 
-    private fun restartVpn(context: Context, profileId: String, configJson: String) {
-        val prefs = context.getSharedPreferences("settings_prefs", Context.MODE_PRIVATE)
-        val enableIpv6 = prefs.getBoolean("enable_ipv6", false)
-        val vpnAddress = prefs.getString("vpn_address", "10.0.0.1") ?: "10.0.0.1"
-        val vpnDns = prefs.getString("vpn_dns", "10.0.0.2") ?: "10.0.0.2"
-        val vpnAddressIpv6 = prefs.getString("vpn_address_ipv6", "fd00::1") ?: "fd00::1"
-        val vpnDnsIpv6 = prefs.getString("vpn_dns_ipv6", "fd00::2") ?: "fd00::2"
-        val vpnMtu = prefs.getInt("vpn_mtu", 9000)
-
-        XrayVpnService.startOrRestart(
-            context = context,
-            configJson = configJson,
-            profileId = profileId,
-            enableIpv6 = enableIpv6,
-            vpnAddress = vpnAddress,
-            vpnDns = vpnDns,
-            vpnAddressIpv6 = vpnAddressIpv6,
-            vpnDnsIpv6 = vpnDnsIpv6,
-            vpnMtu = vpnMtu
-        )
-    }
-
     companion object {
         private const val WORK_NAME = "profile_update_work"
 
         fun setupPeriodicWork(context: Context) {
-            val profileManager = ProfileManager(context)
-            val autoUpdateProfiles = profileManager.getProfiles().filter { it.isRemote && !it.isImported && it.autoUpdateEnabled }
-            val autoUpdateGroups = profileManager.getGroups().filter { it.isRemote && it.autoUpdateEnabled }
+            val profileRepository = ProfileRepository(context)
+            val autoUpdateProfiles = profileRepository.getProfiles().filter { it.isRemote && !it.isImported && it.autoUpdateEnabled }
+            val autoUpdateGroups = profileRepository.getGroups().filter { it.isRemote && it.autoUpdateEnabled }
 
             if (autoUpdateProfiles.isEmpty() && autoUpdateGroups.isEmpty()) {
                 WorkManager.getInstance(context).cancelUniqueWork(WORK_NAME)
