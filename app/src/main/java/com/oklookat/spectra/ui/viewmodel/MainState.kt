@@ -1,6 +1,7 @@
 package com.oklookat.spectra.ui.viewmodel
 
 import androidx.annotation.StringRes
+import com.oklookat.spectra.model.AppUpdate
 import com.oklookat.spectra.model.Group
 import com.oklookat.spectra.model.P2PPayload
 import com.oklookat.spectra.model.PendingGroup
@@ -38,7 +39,12 @@ data class MainUiState(
     val p2pServerUrl: String? = null,
     val p2pServerToken: String? = null,
     val p2pPayloadToAccept: P2PPayload? = null,
-    val showP2PReplaceDialog: Boolean = false
+    val showP2PReplaceDialog: Boolean = false,
+
+    // App Update
+    val availableUpdate: AppUpdate? = null,
+    val isDownloadingUpdate: Boolean = false,
+    val updateDownloadProgress: Float = 0f
 )
 
 sealed class MainUiEvent {

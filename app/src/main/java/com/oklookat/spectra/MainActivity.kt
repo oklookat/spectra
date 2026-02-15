@@ -124,6 +124,10 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun handleIntent(intent: Intent?) {
+        if (intent?.getBooleanExtra("show_update_dialog", false) == true) {
+            viewModel.checkForUpdatesManually()
+        }
+
         when (val result = DeepLinkHandler.handle(intent)) {
             is DeepLinkHandler.DeepLinkResult.Profile -> {
                 viewModel.setDeepLinkProfile(result.pending)

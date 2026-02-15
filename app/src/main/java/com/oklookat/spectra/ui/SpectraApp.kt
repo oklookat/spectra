@@ -15,6 +15,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.oklookat.spectra.R
 import com.oklookat.spectra.model.Screen
+import com.oklookat.spectra.ui.components.AppUpdateDialog
 import com.oklookat.spectra.ui.components.EasyImportVerifyDialog
 import com.oklookat.spectra.ui.components.ReplaceConfirmDialog
 import com.oklookat.spectra.ui.screens.LogsScreen
@@ -68,6 +69,17 @@ fun SpectraApp(
     }
 
     // Dialogs
+    uiState.availableUpdate?.let { update ->
+        AppUpdateDialog(
+            versionName = update.versionName,
+            changelog = update.changelog,
+            isDownloading = uiState.isDownloadingUpdate,
+            progress = uiState.updateDownloadProgress,
+            onConfirm = { viewModel.downloadAndInstallUpdate() },
+            onDismiss = { viewModel.setAvailableUpdate(null) }
+        )
+    }
+
     uiState.pendingProfileToReplace?.let { dp ->
         ReplaceConfirmDialog(
             title = stringResource(R.string.replace_profile_q),
@@ -228,7 +240,8 @@ private fun AppNavigation(
                 onUpdateTunnel = { addr, dns, addr6, dns6, mtu ->
                     viewModel.updateTunnelSettings(addr, dns, addr6, dns6, mtu)
                 },
-                onOpenDeepLinkSettings = { viewModel.openDeepLinkSettings() }
+                onOpenDeepLinkSettings = { viewModel.openDeepLinkSettings() },
+                onCheckUpdates = { viewModel.checkForUpdatesManually() }
             )
             Screen.Logs -> LogsScreen()
         }

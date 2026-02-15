@@ -65,6 +65,9 @@
     <string name="supported_links">Supported Links</string>
     <string name="supported_links_enabled">Enabled</string>
     <string name="supported_links_disabled">Not enabled in system settings</string>
+    <string name="app_updates">App Updates</string>
+    <string name="check_for_updates">Check for Updates</string>
+    <string name="up_to_date">App is up to date</string>
 
     <!-- Logs Screen -->
     <string name="toggle_pause">Toggle Pause</string>
@@ -113,4 +116,14 @@
     <string name="notification_channel_name">Service status</string>
     <string name="notification_content_active">VPN is active</string>
     <string name="notification_action_stop">Stop</string>
+
+    <!-- App Updates -->
+    <string name="app_updates_channel_name">App Updates</string>
+    <string name="update_available_title">Update Available</string>
+    <string name="update_available_text">New version %1$s is available.</string>
+    <string name="update_dialog_title">Update Spectra</string>
+    <string name="update_dialog_message">A new version (%1$s) is available. Would you like to update now?</string>
+    <string name="update_now">Update Now</string>
+    <string name="downloading_update">Downloading update...</string>
+    <string name="update_failed_msg">Update failed to download.</string>
 </resources>

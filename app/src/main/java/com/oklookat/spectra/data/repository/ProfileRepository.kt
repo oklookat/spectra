@@ -156,7 +156,11 @@ class ProfileRepository(context: Context) {
         val json = sharedPreferences.getString("profiles_list", null) ?: return emptyList()
         val type = object : TypeToken<List<Profile>>() {}.type
         return try {
-            gson.fromJson(json, type)
+            val profiles: List<Profile> = gson.fromJson(json, type)
+            // Ensure groupId is not null after loading from GSON
+            profiles.map { 
+                if (it.groupId == null) it.copy(groupId = Group.DEFAULT_GROUP_ID) else it 
+            }
         } catch (e: Exception) {
             emptyList()
         }

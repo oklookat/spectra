@@ -9,9 +9,11 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.oklookat.spectra.BuildConfig
 import com.oklookat.spectra.R
 import com.oklookat.spectra.data.repository.ProfileRepository
 import com.oklookat.spectra.data.repository.SettingsRepository
+import com.oklookat.spectra.model.AppUpdate
 import com.oklookat.spectra.model.Group
 import com.oklookat.spectra.model.P2PPayload
 import com.oklookat.spectra.model.PendingGroup
@@ -19,10 +21,12 @@ import com.oklookat.spectra.model.PendingProfile
 import com.oklookat.spectra.model.Profile
 import com.oklookat.spectra.model.Screen
 import com.oklookat.spectra.service.XrayVpnService
+import com.oklookat.spectra.util.AppUpdateWorker
 import com.oklookat.spectra.util.LogManager
 import com.oklookat.spectra.util.P2PClient
 import com.oklookat.spectra.util.P2PServer
 import com.oklookat.spectra.util.TvUtils
+import com.oklookat.spectra.util.UpdateManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
@@ -34,9 +38,12 @@ import kotlinx.coroutines.withContext
 class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val profileRepository = ProfileRepository(application)
     private val settingsRepository = SettingsRepository(application)
+    private val updateManager = UpdateManager(application)
     private val p2pClient = P2PClient()
     private var p2pServer: P2PServer? = null
     
+    private val UPDATE_URL = BuildConfig.UPDATE_URL
+
     companion object {
         private var hasShownVerifyDialogThisSession = false
     }
@@ -57,6 +64,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             .launchIn(viewModelScope)
         
         checkDeepLinkStatus()
+        setupAppUpdates()
+        
+        // Automatic update check on app launch if enabled
+        if (UPDATE_URL.isNotBlank()) {
+            checkForUpdatesManually()
+        }
     }
 
     private fun loadInitialState() {
@@ -74,6 +87,37 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 vpnMtu = settingsRepository.vpnMtu
             )
         )
+    }
+
+    private fun setupAppUpdates() {
+        AppUpdateWorker.setupPeriodicWork(getApplication(), UPDATE_URL)
+    }
+
+    fun checkForUpdatesManually() {
+        if (UPDATE_URL.isBlank()) return
+        
+        viewModelScope.launch {
+            val update = updateManager.checkForUpdates(UPDATE_URL)
+            uiState = uiState.copy(availableUpdate = update)
+        }
+    }
+
+    fun setAvailableUpdate(update: AppUpdate?) {
+        uiState = uiState.copy(availableUpdate = update)
+    }
+
+    fun downloadAndInstallUpdate() {
+        val update = uiState.availableUpdate ?: return
+        viewModelScope.launch {
+            uiState = uiState.copy(isDownloadingUpdate = true, updateDownloadProgress = 0f)
+            val success = updateManager.downloadAndInstallApk(update) { progress ->
+                uiState = uiState.copy(updateDownloadProgress = progress)
+            }
+            uiState = uiState.copy(isDownloadingUpdate = false)
+            if (!success) {
+                _events.emit(MainUiEvent.ShowToast(messageResId = R.string.update_failed_msg))
+            }
+        }
     }
 
     override fun onCleared() {

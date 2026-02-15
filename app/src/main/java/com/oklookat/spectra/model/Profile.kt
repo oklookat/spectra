@@ -4,7 +4,7 @@ import java.util.UUID
 
 data class Profile(
     val id: String = UUID.randomUUID().toString(),
-    val groupId: String = Group.DEFAULT_GROUP_ID,
+    val groupId: String? = Group.DEFAULT_GROUP_ID,
     val name: String,
     val url: String? = null, // Original URL if it was a single remote profile, or content if it's a proxy link
     val isRemote: Boolean = false,

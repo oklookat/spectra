@@ -4,6 +4,10 @@ plugins {
     alias(libs.plugins.kotlin.compose)
 }
 
+val versionMajor = 1
+val versionMinor = 0
+val versionPatch = 0
+
 android {
     namespace = "com.oklookat.spectra"
     compileSdk = 36
@@ -12,8 +16,14 @@ android {
         applicationId = "com.oklookat.spectra"
         minSdk = 29
         targetSdk = 36
-        versionCode = 1
-        versionName = "1.0"
+        
+        versionCode = versionMajor * 10000 + versionMinor * 100 + versionPatch
+        versionName = "$versionMajor.$versionMinor.$versionPatch"
+
+        // example: https://raw.githubusercontent.com/username/spectra/main/update.json
+        // empty == autoupdates disabled
+        val updateUrl = ""
+        buildConfigField("String", "UPDATE_URL", "\"$updateUrl\"")
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -29,11 +39,16 @@ android {
         }
     }
 
+    buildFeatures {
+        compose = true
+        buildConfig = true
+    }
+
     splits {
         abi {
             isEnable = true
             reset()
-            include("armeabi-v7a", "arm64-v8a", "x86", "x86_64")
+            include("armeabi-v7a", "arm64-v8a", "x86_64")
             isUniversalApk = false
         }
     }
@@ -44,10 +59,6 @@ android {
     }
     kotlinOptions {
         jvmTarget = "11"
-    }
-    buildFeatures {
-        compose = true
-        buildConfig = true
     }
 }
 
@@ -68,11 +79,9 @@ dependencies {
     
     implementation("androidx.compose.material:material-icons-extended")
 
-    // Android TV
     implementation(libs.androidx.tv.foundation)
     implementation(libs.androidx.tv.material)
 
-    // QR & Camera
     implementation(libs.zxing.core)
     implementation(libs.barcode.scanning)
     implementation(libs.androidx.camera.core)
@@ -89,7 +98,5 @@ dependencies {
     debugImplementation(libs.androidx.compose.ui.test.manifest)
 
     implementation(files("libs/libv2ray.aar"))
-
-    // HTTP server (sharing, etc)
     implementation(libs.nanohttpd.webserver)
 }

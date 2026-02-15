@@ -33,6 +33,7 @@ fun SettingsScreen(
     onToggleIpv6: (Boolean) -> Unit,
     onUpdateTunnel: (String, String, String, String, Int) -> Unit,
     onOpenDeepLinkSettings: () -> Unit,
+    onCheckUpdates: () -> Unit
 ) {
     Column(
         modifier = Modifier
@@ -126,6 +127,20 @@ fun SettingsScreen(
             )
         }
 
+        if (BuildConfig.UPDATE_URL.isNotBlank()) {
+            HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp))
+            SettingsSectionTitle(stringResource(R.string.app_updates))
+            ListItem(
+                headlineContent = { Text(stringResource(R.string.app_updates)) },
+                supportingContent = { Text(stringResource(R.string.check_for_updates)) },
+                leadingContent = { Icon(Icons.Default.Update, contentDescription = null) },
+                trailingContent = {
+                    Button(onClick = onCheckUpdates) {
+                        Text(stringResource(R.string.refresh))
+                    }
+                }
+            )
+        }
 
         if (BuildConfig.DEBUG) {
             HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp))

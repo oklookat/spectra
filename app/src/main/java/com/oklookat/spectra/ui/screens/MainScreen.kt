@@ -20,6 +20,7 @@ import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.oklookat.spectra.BuildConfig
 import com.oklookat.spectra.R
 import com.oklookat.spectra.ui.components.LinkItem
 import com.oklookat.spectra.util.TvUtils
@@ -207,11 +208,7 @@ private fun AppVersionInfo() {
     val context = LocalContext.current
     val isTv = TvUtils.isTv(context)
     
-    val appVersion = try {
-        context.packageManager.getPackageInfo(context.packageName, 0).versionName
-    } catch (e: Exception) {
-        "1.0.0"
-    }
+    val appVersion = BuildConfig.VERSION_NAME
 
     val xrayFullVersion = try {
         Libv2ray.checkVersionX()
