@@ -94,6 +94,8 @@
     <string name="preset_loyalsoldier">Loyalsoldier/v2ray-rules-dat</string>
     <string name="applying_preset">Применение пресета: %1$s</string>
     <string name="downloading_file">Загрузка %1$s…</string>
+    <string name="resource_up_to_date">Обновление не требуется</string>
+    <string name="all_resources_up_to_date">Все ресурсы актуальны</string>
 
     <!-- Logs Screen -->
     <string name="toggle_pause">Пауза/Возоновление</string>

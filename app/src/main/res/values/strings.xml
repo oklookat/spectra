@@ -95,6 +95,8 @@
     <string name="preset_loyalsoldier">Loyalsoldier/v2ray-rules-dat</string>
     <string name="applying_preset">Applying preset: %1$s</string>
     <string name="downloading_file">Downloading %1$s…</string>
+    <string name="resource_up_to_date">Resource is up to date</string>
+    <string name="all_resources_up_to_date">All resources are up to date</string>
 
     <!-- Logs Screen -->
     <string name="toggle_pause">Toggle Pause</string>

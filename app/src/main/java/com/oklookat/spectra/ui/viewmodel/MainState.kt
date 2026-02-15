@@ -27,11 +27,10 @@ data class MainUiState(
     val groups: List<Group> = emptyList(),
     val profiles: List<Profile> = emptyList(),
     val resources: List<Resource> = emptyList(),
-    val isDownloadingResource: Boolean = false,
-    val resourceDownloadProgress: Float = 0f,
-    val resourceDownloadProgress2: Float = 0f, // For second file in preset
-    val currentDownloadingResourceName: String? = null,
-    val currentDownloadingResourceName2: String? = null,
+    
+    // Resource Download State
+    val downloadingResources: Map<String, Float> = emptyMap(), // name -> progress (0f..1f)
+    
     val selectedProfileId: String? = null,
     val deepLinkProfile: PendingProfile? = null,
     val pendingProfileToReplace: PendingProfile? = null,
@@ -52,7 +51,9 @@ data class MainUiState(
     val availableUpdate: AppUpdate? = null,
     val isDownloadingUpdate: Boolean = false,
     val updateDownloadProgress: Float = 0f
-)
+) {
+    val isDownloadingResource: Boolean get() = downloadingResources.isNotEmpty()
+}
 
 sealed class MainUiEvent {
     data class ShowToast(

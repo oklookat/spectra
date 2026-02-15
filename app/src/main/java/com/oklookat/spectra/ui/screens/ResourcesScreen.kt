@@ -18,6 +18,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.oklookat.spectra.R
 import com.oklookat.spectra.model.Resource
@@ -85,27 +86,17 @@ fun ResourcesScreen(viewModel: MainViewModel) {
     ) { innerPadding ->
         Column(modifier = Modifier.fillMaxSize().padding(innerPadding)) {
             if (uiState.isDownloadingResource) {
-                Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
-                    if (uiState.currentDownloadingResourceName != null) {
-                        Text(
-                            text = stringResource(R.string.downloading_file, uiState.currentDownloadingResourceName),
-                            style = MaterialTheme.typography.labelMedium
-                        )
-                        LinearProgressIndicator(
-                            progress = { uiState.resourceDownloadProgress },
-                            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-                        )
-                    }
-                    if (uiState.currentDownloadingResourceName2 != null) {
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Text(
-                            text = stringResource(R.string.downloading_file, uiState.currentDownloadingResourceName2),
-                            style = MaterialTheme.typography.labelMedium
-                        )
-                        LinearProgressIndicator(
-                            progress = { uiState.resourceDownloadProgress2 },
-                            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-                        )
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = stringResource(R.string.downloading_update),
+                        style = MaterialTheme.typography.titleSmall,
+                        modifier = Modifier.weight(1f)
+                    )
+                    IconButton(onClick = { viewModel.cancelResourceDownload() }) {
+                        Icon(Icons.Default.Close, contentDescription = stringResource(R.string.cancel))
                     }
                 }
             }
@@ -123,6 +114,7 @@ fun ResourcesScreen(viewModel: MainViewModel) {
                     items(uiState.resources, key = { it.name }) { resource ->
                         ResourceItem(
                             resource = resource,
+                            downloadProgress = uiState.downloadingResources[resource.name],
                             onUpdate = { viewModel.updateResource(resource) },
                             onDelete = { viewModel.deleteResource(resource.name) }
                         )
@@ -133,10 +125,13 @@ fun ResourcesScreen(viewModel: MainViewModel) {
     }
 
     if (showAddDialog) {
+        // Find if the resource being added is currently downloading
+        val addingResourceName = remember(showAddDialog) { "" } // This would need better tracking if we wanted it in dialog
+        
         AddResourceDialog(
             isDownloading = uiState.isDownloadingResource,
-            downloadProgress = uiState.resourceDownloadProgress,
-            resourceName = uiState.currentDownloadingResourceName,
+            downloadProgress = uiState.downloadingResources.values.firstOrNull() ?: 0f,
+            resourceName = uiState.downloadingResources.keys.firstOrNull(),
             onDismiss = { 
                 viewModel.cancelResourceDownload()
                 showAddDialog = false 
@@ -153,14 +148,14 @@ fun ResourcesScreen(viewModel: MainViewModel) {
     }
     
     LaunchedEffect(uiState.isDownloadingResource) {
-        if (!uiState.isDownloadingResource && showAddDialog && uiState.resourceDownloadProgress >= 1f) {
+        if (!uiState.isDownloadingResource && showAddDialog) {
             showAddDialog = false
         }
     }
 }
 
 @Composable
-fun ResourceItem(resource: Resource, onUpdate: () -> Unit, onDelete: () -> Unit) {
+fun ResourceItem(resource: Resource, downloadProgress: Float?, onUpdate: () -> Unit, onDelete: () -> Unit) {
     var expanded by remember { mutableStateOf(false) }
     val isDeletable = !resource.isDefault || resource.url != null
     val hasActions = resource.url != null || isDeletable
@@ -171,86 +166,98 @@ fun ResourceItem(resource: Resource, onUpdate: () -> Unit, onDelete: () -> Unit)
             containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
         )
     ) {
-        Row(
-            modifier = Modifier.padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Icon(
-                imageVector = if (resource.url != null) Icons.Default.CloudDownload else Icons.Default.InsertDriveFile,
-                contentDescription = null,
-                modifier = Modifier.size(24.dp),
-                tint = MaterialTheme.colorScheme.primary
-            )
-            Spacer(modifier = Modifier.width(16.dp))
-            Column(modifier = Modifier.weight(1f)) {
-                Text(text = resource.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        text = formatFileSize(resource.size),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    if (resource.isDefault && resource.url == null) {
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Surface(
-                            shape = MaterialTheme.shapes.extraSmall,
-                            color = MaterialTheme.colorScheme.secondaryContainer
-                        ) {
-                            Text(
-                                text = stringResource(R.string.system_resource),
-                                modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp),
-                                style = MaterialTheme.typography.labelSmall
-                            )
+        Column(modifier = Modifier.fillMaxWidth()) {
+            Row(
+                modifier = Modifier.padding(16.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    imageVector = if (resource.url != null) Icons.Default.CloudDownload else Icons.Default.InsertDriveFile,
+                    contentDescription = null,
+                    modifier = Modifier.size(24.dp),
+                    tint = MaterialTheme.colorScheme.primary
+                )
+                Spacer(modifier = Modifier.width(16.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(text = resource.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = formatFileSize(resource.size),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        if (resource.isDefault && resource.url == null) {
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Surface(
+                                shape = MaterialTheme.shapes.extraSmall,
+                                color = MaterialTheme.colorScheme.secondaryContainer
+                              ) {
+                                Text(
+                                    text = stringResource(R.string.system_resource),
+                                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp),
+                                    style = MaterialTheme.typography.labelSmall
+                                )
+                            }
                         }
                     }
+                    if (resource.url != null) {
+                        Text(
+                            text = resource.url.replace("https://", "").replace("http://", ""),
+                            style = MaterialTheme.typography.bodySmall,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
                 }
-                if (resource.url != null) {
-                    Text(
-                        text = resource.url,
-                        style = MaterialTheme.typography.bodySmall,
-                        maxLines = 1,
-                        color = MaterialTheme.colorScheme.primary
-                    )
+                
+                if (hasActions) {
+                    Box {
+                        IconButton(onClick = { expanded = true }) {
+                            Icon(Icons.Default.MoreVert, contentDescription = null)
+                        }
+                        DropdownMenu(
+                            expanded = expanded,
+                            onDismissRequest = { expanded = false }
+                        ) {
+                            if (resource.url != null) {
+                                DropdownMenuItem(
+                                    text = { Text(stringResource(R.string.refresh)) },
+                                    onClick = {
+                                        expanded = false
+                                        onUpdate()
+                                    },
+                                    leadingIcon = { Icon(Icons.Default.Refresh, contentDescription = null) }
+                                )
+                            }
+                            if (isDeletable) {
+                                DropdownMenuItem(
+                                    text = { Text(stringResource(R.string.delete), color = MaterialTheme.colorScheme.error) },
+                                    onClick = {
+                                        expanded = false
+                                        onDelete()
+                                    },
+                                    leadingIcon = { 
+                                        Icon(
+                                            Icons.Default.DeleteOutline, 
+                                            contentDescription = null, 
+                                            tint = MaterialTheme.colorScheme.error 
+                                        ) 
+                                    }
+                                )
+                            }
+                        }
+                    }
                 }
             }
             
-            if (hasActions) {
-                Box {
-                    IconButton(onClick = { expanded = true }) {
-                        Icon(Icons.Default.MoreVert, contentDescription = null)
-                    }
-                    DropdownMenu(
-                        expanded = expanded,
-                        onDismissRequest = { expanded = false }
-                    ) {
-                        if (resource.url != null) {
-                            DropdownMenuItem(
-                                text = { Text(stringResource(R.string.refresh)) },
-                                onClick = {
-                                    expanded = false
-                                    onUpdate()
-                                },
-                                leadingIcon = { Icon(Icons.Default.Refresh, contentDescription = null) }
-                            )
-                        }
-                        if (isDeletable) {
-                            DropdownMenuItem(
-                                text = { Text(stringResource(R.string.delete), color = MaterialTheme.colorScheme.error) },
-                                onClick = {
-                                    expanded = false
-                                    onDelete()
-                                },
-                                leadingIcon = { 
-                                    Icon(
-                                        Icons.Default.DeleteOutline, 
-                                        contentDescription = null, 
-                                        tint = MaterialTheme.colorScheme.error 
-                                    ) 
-                                }
-                            )
-                        }
-                    }
-                }
+            if (downloadProgress != null) {
+                LinearProgressIndicator(
+                    progress = { downloadProgress },
+                    modifier = Modifier.fillMaxWidth().height(4.dp),
+                    color = MaterialTheme.colorScheme.primary,
+                    trackColor = Color.Transparent
+                )
             }
         }
     }

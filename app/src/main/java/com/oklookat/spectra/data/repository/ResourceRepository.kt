@@ -73,6 +73,9 @@ class ResourceRepository(private val context: Context) {
         saveResourcesInternal(resources)
     }
 
+    /**
+     * @return Result with true if file was downloaded, false if not modified (304)
+     */
     suspend fun addOrUpdateResource(
         name: String,
         url: String?,
@@ -80,7 +83,7 @@ class ResourceRepository(private val context: Context) {
         interval: Int,
         fileBytes: ByteArray? = null,
         onProgress: (Float) -> Unit = {}
-    ): Result<Unit> = withContext(Dispatchers.IO) {
+    ): Result<Boolean> = withContext(Dispatchers.IO) {
         if (name in reservedNames) {
             return@withContext Result.failure(Exception("Name '$name' is reserved"))
         }
@@ -94,9 +97,14 @@ class ResourceRepository(private val context: Context) {
         }
 
         try {
+            var wasDownloaded = true
             var newEtag: String? = null
             if (url != null) {
-                newEtag = downloadResource(url, name, null, onProgress)
+                val existing = getResources().find { it.name == name }
+                val etagToUse = if (existing?.url == url) existing.etag else null
+                
+                newEtag = downloadResource(url, name, etagToUse, onProgress)
+                wasDownloaded = newEtag != etagToUse || etagToUse == null
             } else if (fileBytes != null) {
                 File(resourcesDir, name).writeBytes(fileBytes)
             }
@@ -122,11 +130,13 @@ class ResourceRepository(private val context: Context) {
 
                 saveResourcesInternal(resources)
             }
-            Result.success(Unit)
+            Result.success(wasDownloaded)
         } catch (e: Exception) {
             if (url != null) {
                 val file = File(resourcesDir, name)
-                if (file.exists()) file.delete()
+                if (file.exists() && getFileSize(name) == 0L) {
+                    file.delete()
+                }
             }
             Result.failure(e)
         }
@@ -181,7 +191,6 @@ class ResourceRepository(private val context: Context) {
                 return@withContext etag
             }
         } catch (e: Exception) {
-            if (file.exists()) file.delete()
             throw e
         }
     }

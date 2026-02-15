@@ -34,6 +34,8 @@ import com.oklookat.spectra.util.UpdateManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.launchIn
@@ -163,13 +165,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun applyResourcePreset(type: ResourcePresetType) {
         resourceDownloadJob?.cancel()
         resourceDownloadJob = viewModelScope.launch {
-            uiState = uiState.copy(
-                isDownloadingResource = true, 
-                resourceDownloadProgress = 0f,
-                resourceDownloadProgress2 = 0f,
-                currentDownloadingResourceName = null,
-                currentDownloadingResourceName2 = null
-            )
+            uiState = uiState.copy(downloadingResources = emptyMap())
             LogManager.addLog("[Resource] Applying preset: $type")
             
             try {
@@ -178,46 +174,48 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         resourceRepository.deleteResource("geoip.dat")
                         resourceRepository.deleteResource("geosite.dat")
                         LogManager.addLog("[Resource] Preset System: Custom geo-files deleted")
+                        uiState = uiState.copy(resources = resourceRepository.getResources())
+                        _events.emit(MainUiEvent.ShowToast(messageResId = R.string.all_resources_reloaded))
                     }
                     ResourcePresetType.RUNETFREEDOM -> {
                         val geoipUrl = "https://github.com/runetfreedom/russia-v2ray-rules-dat/raw/refs/heads/release/geoip.dat"
                         val geositeUrl = "https://github.com/runetfreedom/russia-v2ray-rules-dat/raw/refs/heads/release/geosite.dat"
-                        downloadTwoFilesParallel(geoipUrl, geositeUrl)
+                        val anyDownloaded = downloadTwoFilesParallel(geoipUrl, geositeUrl)
+                        uiState = uiState.copy(resources = resourceRepository.getResources())
+                        val msg = if (anyDownloaded) R.string.all_resources_reloaded else R.string.all_resources_up_to_date
+                        _events.emit(MainUiEvent.ShowToast(messageResId = msg))
                     }
                     ResourcePresetType.LOYAL_SOLDIER -> {
                         val geoipUrl = "https://github.com/Loyalsoldier/v2ray-rules-dat/raw/refs/heads/release/geoip.dat"
                         val geositeUrl = "https://github.com/Loyalsoldier/v2ray-rules-dat/raw/refs/heads/release/geosite.dat"
-                        downloadTwoFilesParallel(geoipUrl, geositeUrl)
+                        val anyDownloaded = downloadTwoFilesParallel(geoipUrl, geositeUrl)
+                        uiState = uiState.copy(resources = resourceRepository.getResources())
+                        val msg = if (anyDownloaded) R.string.all_resources_reloaded else R.string.all_resources_up_to_date
+                        _events.emit(MainUiEvent.ShowToast(messageResId = msg))
                     }
                 }
-                uiState = uiState.copy(resources = resourceRepository.getResources())
-                _events.emit(MainUiEvent.ShowToast(messageResId = R.string.all_resources_reloaded))
             } catch (e: Exception) {
                 val error = e.message ?: "Error"
                 LogManager.addLog("[Resource] Preset error: $error")
-                _events.emit(MainUiEvent.ShowToast(message = error))
+                if (e !is kotlinx.coroutines.CancellationException) {
+                    _events.emit(MainUiEvent.ShowToast(message = error))
+                }
             } finally {
-                uiState = uiState.copy(
-                    isDownloadingResource = false,
-                    currentDownloadingResourceName = null,
-                    currentDownloadingResourceName2 = null
-                )
+                uiState = uiState.copy(downloadingResources = emptyMap())
             }
         }
     }
 
-    private suspend fun downloadTwoFilesParallel(geoipUrl: String, geositeUrl: String) = withContext(Dispatchers.IO) {
-        uiState = uiState.copy(currentDownloadingResourceName = "geoip.dat", currentDownloadingResourceName2 = "geosite.dat")
-        
+    private suspend fun downloadTwoFilesParallel(geoipUrl: String, geositeUrl: String): Boolean = withContext(Dispatchers.IO) {
         val d1 = async {
             resourceRepository.addOrUpdateResource("geoip.dat", geoipUrl, true, 24) { progress ->
-                uiState = uiState.copy(resourceDownloadProgress = progress)
+                updateDownloadProgress("geoip.dat", progress)
             }
         }
         
         val d2 = async {
             resourceRepository.addOrUpdateResource("geosite.dat", geositeUrl, true, 24) { progress ->
-                uiState = uiState.copy(resourceDownloadProgress2 = progress)
+                updateDownloadProgress("geosite.dat", progress)
             }
         }
         
@@ -226,22 +224,35 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         
         if (r1.isFailure) throw r1.exceptionOrNull() ?: Exception("Failed to download geoip.dat")
         if (r2.isFailure) throw r2.exceptionOrNull() ?: Exception("Failed to download geosite.dat")
+        
+        return@withContext r1.getOrNull() == true || r2.getOrNull() == true
+    }
+
+    private fun updateDownloadProgress(name: String, progress: Float) {
+        val current = uiState.downloadingResources.toMutableMap()
+        current[name] = progress
+        uiState = uiState.copy(downloadingResources = current)
     }
 
     fun addRemoteResource(name: String, url: String, autoUpdate: Boolean, interval: Int) {
         resourceDownloadJob?.cancel()
         resourceDownloadJob = viewModelScope.launch {
-            uiState = uiState.copy(isDownloadingResource = true, resourceDownloadProgress = 0f, currentDownloadingResourceName = name)
+            updateDownloadProgress(name, 0f)
             val result = resourceRepository.addOrUpdateResource(name, url, autoUpdate, interval) { progress ->
-                uiState = uiState.copy(resourceDownloadProgress = progress)
+                updateDownloadProgress(name, progress)
             }
-            uiState = uiState.copy(isDownloadingResource = false, currentDownloadingResourceName = null)
             if (result.isSuccess) {
-                uiState = uiState.copy(resources = resourceRepository.getResources())
+                val wasDownloaded = result.getOrNull() == true
+                uiState = uiState.copy(
+                    resources = resourceRepository.getResources(),
+                    downloadingResources = uiState.downloadingResources - name
+                )
                 LogManager.addLog("[Resource] Added: $name from $url")
-                _events.emit(MainUiEvent.ShowToast(messageResId = R.string.resource_added))
+                val msg = if (wasDownloaded) R.string.resource_added else R.string.resource_up_to_date
+                _events.emit(MainUiEvent.ShowToast(messageResId = msg))
                 setupResourceUpdates()
             } else {
+                uiState = uiState.copy(downloadingResources = uiState.downloadingResources - name)
                 val error = result.exceptionOrNull()?.message ?: "Unknown error"
                 if (error != "Job was cancelled") {
                     LogManager.addLog("[Resource] Error adding $name: $error")
@@ -253,7 +264,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun cancelResourceDownload() {
         resourceDownloadJob?.cancel()
-        uiState = uiState.copy(isDownloadingResource = false, currentDownloadingResourceName = null, currentDownloadingResourceName2 = null)
+        uiState = uiState.copy(downloadingResources = emptyMap())
     }
 
     fun addLocalResource(name: String, uri: Uri) {
@@ -293,21 +304,26 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         val url = resource.url ?: return
         resourceDownloadJob?.cancel()
         resourceDownloadJob = viewModelScope.launch {
-            uiState = uiState.copy(isDownloadingResource = true, resourceDownloadProgress = 0f, currentDownloadingResourceName = resource.name)
+            updateDownloadProgress(resource.name, 0f)
             val result = resourceRepository.addOrUpdateResource(
                 resource.name, 
                 url, 
                 resource.autoUpdateEnabled, 
                 resource.autoUpdateIntervalHours
             ) { progress ->
-                uiState = uiState.copy(resourceDownloadProgress = progress)
+                updateDownloadProgress(resource.name, progress)
             }
-            uiState = uiState.copy(isDownloadingResource = false, currentDownloadingResourceName = null)
             if (result.isSuccess) {
-                uiState = uiState.copy(resources = resourceRepository.getResources())
+                val wasDownloaded = result.getOrNull() == true
+                uiState = uiState.copy(
+                    resources = resourceRepository.getResources(),
+                    downloadingResources = uiState.downloadingResources - resource.name
+                )
                 LogManager.addLog("[Resource] Updated: ${resource.name}")
-                _events.emit(MainUiEvent.ShowToast(messageResId = R.string.resource_updated))
+                val msg = if (wasDownloaded) R.string.resource_updated else R.string.resource_up_to_date
+                _events.emit(MainUiEvent.ShowToast(messageResId = msg))
             } else {
+                uiState = uiState.copy(downloadingResources = uiState.downloadingResources - resource.name)
                 val error = result.exceptionOrNull()?.message ?: "Unknown error"
                 if (error != "Job was cancelled") {
                     LogManager.addLog("[Resource] Update error for ${resource.name}: $error")
@@ -318,29 +334,41 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun reloadAllResources() {
-        viewModelScope.launch {
+        resourceDownloadJob?.cancel()
+        resourceDownloadJob = viewModelScope.launch {
             val resources = uiState.resources.filter { it.url != null }
             if (resources.isEmpty()) return@launch
             
-            uiState = uiState.copy(isDownloadingResource = true, resourceDownloadProgress = 0f)
-            var successCount = 0
-            for (res in resources) {
-                uiState = uiState.copy(currentDownloadingResourceName = res.name)
-                val result = resourceRepository.addOrUpdateResource(res.name, res.url, res.autoUpdateEnabled, res.autoUpdateIntervalHours) { progress ->
-                    uiState = uiState.copy(resourceDownloadProgress = progress)
-                }
-                if (result.isSuccess) {
-                    successCount++
-                } else {
-                    LogManager.addLog("[Resource] Batch update error for ${res.name}: ${result.exceptionOrNull()?.message}")
-                }
-            }
-            uiState = uiState.copy(isDownloadingResource = false, resources = resourceRepository.getResources(), currentDownloadingResourceName = null)
+            uiState = uiState.copy(downloadingResources = emptyMap())
             
-            if (successCount == resources.size) {
-                _events.emit(MainUiEvent.ShowToast(messageResId = R.string.all_resources_reloaded))
-            } else {
-                _events.emit(MainUiEvent.ShowToast(messageResId = R.string.failed_to_reload_resources))
+            try {
+                coroutineScope {
+                    val tasks = resources.map { res ->
+                        async {
+                            resourceRepository.addOrUpdateResource(res.name, res.url!!, res.autoUpdateEnabled, res.autoUpdateIntervalHours) { progress ->
+                                updateDownloadProgress(res.name, progress)
+                            }
+                        }
+                    }
+                    val results = tasks.awaitAll()
+                    val successCount = results.count { it.isSuccess }
+                    val anyDownloaded = results.any { it.getOrNull() == true }
+                    
+                    uiState = uiState.copy(resources = resourceRepository.getResources())
+                    
+                    if (successCount == resources.size) {
+                        val msg = if (anyDownloaded) R.string.all_resources_reloaded else R.string.all_resources_up_to_date
+                        _events.emit(MainUiEvent.ShowToast(messageResId = msg))
+                    } else {
+                        _events.emit(MainUiEvent.ShowToast(messageResId = R.string.failed_to_reload_resources))
+                    }
+                }
+            } catch (e: Exception) {
+                if (e !is kotlinx.coroutines.CancellationException) {
+                    LogManager.addLog("[Resource] Batch update error: ${e.message}")
+                }
+            } finally {
+                uiState = uiState.copy(downloadingResources = emptyMap())
             }
         }
     }
