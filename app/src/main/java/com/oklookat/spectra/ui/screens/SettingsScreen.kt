@@ -33,7 +33,8 @@ fun SettingsScreen(
     onToggleIpv6: (Boolean) -> Unit,
     onUpdateTunnel: (String, String, String, String, Int) -> Unit,
     onOpenDeepLinkSettings: () -> Unit,
-    onCheckUpdates: () -> Unit
+    onCheckUpdates: () -> Unit,
+    onOpenResources: () -> Unit
 ) {
     Column(
         modifier = Modifier
@@ -103,6 +104,19 @@ fun SettingsScreen(
             enabled = !isVpnEnabled,
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
             singleLine = true
+        )
+
+        HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp))
+        SettingsSectionTitle(stringResource(R.string.resources))
+        ListItem(
+            headlineContent = { Text(stringResource(R.string.resources)) },
+            supportingContent = { Text(stringResource(R.string.manage_geo_files)) },
+            leadingContent = { Icon(Icons.Default.Folder, contentDescription = null) },
+            trailingContent = {
+                Button(onClick = onOpenResources) {
+                    Text(stringResource(R.string.configure))
+                }
+            }
         )
 
         if(!isTv) {

@@ -21,6 +21,7 @@ import com.oklookat.spectra.ui.components.ReplaceConfirmDialog
 import com.oklookat.spectra.ui.screens.LogsScreen
 import com.oklookat.spectra.ui.screens.MainScreen
 import com.oklookat.spectra.ui.screens.ProfilesScreen
+import com.oklookat.spectra.ui.screens.ResourcesScreen
 import com.oklookat.spectra.ui.screens.SettingsScreen
 import com.oklookat.spectra.ui.viewmodel.MainUiState
 import com.oklookat.spectra.ui.viewmodel.MainViewModel
@@ -150,7 +151,7 @@ private fun MobileAppStructure(
     Scaffold(
         bottomBar = {
             NavigationBar {
-                Screen.entries.forEach { screen ->
+                Screen.entries.filter { it.showInNav }.forEach { screen ->
                     val label = stringResource(screen.labelRes)
                     NavigationBarItem(
                         selected = uiState.currentScreen == screen,
@@ -181,7 +182,7 @@ private fun TvAppStructure(
 ) {
     Row(modifier = Modifier.fillMaxSize()) {
         NavigationRail {
-            Screen.entries.forEach { screen ->
+            Screen.entries.filter { it.showInNav }.forEach { screen ->
                 val label = stringResource(screen.labelRes)
                 NavigationRailItem(
                     selected = uiState.currentScreen == screen,
@@ -241,9 +242,11 @@ private fun AppNavigation(
                     viewModel.updateTunnelSettings(addr, dns, addr6, dns6, mtu)
                 },
                 onOpenDeepLinkSettings = { viewModel.openDeepLinkSettings() },
-                onCheckUpdates = { viewModel.checkForUpdatesManually() }
+                onCheckUpdates = { viewModel.checkForUpdatesManually() },
+                onOpenResources = { viewModel.setScreen(Screen.Resources) }
             )
             Screen.Logs -> LogsScreen()
+            Screen.Resources -> ResourcesScreen(viewModel = viewModel)
         }
     }
 }

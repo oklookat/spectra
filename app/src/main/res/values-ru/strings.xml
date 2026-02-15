@@ -6,6 +6,7 @@
     <string name="nav_profiles">Профили</string>
     <string name="nav_logs">Логи</string>
     <string name="nav_settings">Настройки</string>
+    <string name="nav_resources">Ресурсы</string>
 
     <!-- Main Screen -->
     <string name="disable_vpn">Отключить VPN</string>
@@ -31,6 +32,7 @@
     <string name="url">URL</string>
     <string name="auto_update">Автообновление</string>
     <string name="interval_minutes">Интервал (минуты, мин. 15)</string>
+    <string name="interval_minutes_hourly">Интервал (часы, мин. 1)</string>
     <string name="add">Добавить</string>
     <string name="save">Сохранить</string>
     <string name="cancel">Отмена</string>
@@ -64,6 +66,34 @@
     <string name="supported_links">Поддерживаемые ссылки</string>
     <string name="supported_links_enabled">Включено</string>
     <string name="supported_links_disabled">Не включено в настройках системы</string>
+    <string name="app_updates">Обновления приложения</string>
+    <string name="check_for_updates">Проверить обновления</string>
+    <string name="up_to_date">Приложение обновлено</string>
+    <string name="resources">Ресурсы</string>
+    <string name="manage_geo_files">Управление гео-файлами Xray</string>
+
+    <!-- Resources Screen -->
+    <string name="add_resource">Добавить ресурс</string>
+    <string name="reload_all">Обновить все</string>
+    <string name="file_from_url">По URL</string>
+    <string name="file_from_storage">Из памяти</string>
+    <string name="unique_name_required">Название должно быть уникальным</string>
+    <string name="name_reserved">Это название зарезервировано</string>
+    <string name="resource_added">Ресурс добавлен</string>
+    <string name="failed_to_add_resource">Не удалось добавить ресурс</string>
+    <string name="all_resources_reloaded">Все ресурсы обновлены</string>
+    <string name="failed_to_reload_resources">Не удалось обновить некоторые ресурсы</string>
+    <string name="size_kb">%1$.2f КБ</string>
+    <string name="size_mb">%1$.2f МБ</string>
+    <string name="resource_updated">Ресурс обновлен</string>
+    <string name="failed_to_update_resource">Не удалось обновить ресурс</string>
+    <string name="system_resource">Системный</string>
+    <string name="presets">Пресеты</string>
+    <string name="preset_system">Системные (по умолчанию)</string>
+    <string name="preset_runetfreedom">runetfreedom/russia-v2ray-rules-dat</string>
+    <string name="preset_loyalsoldier">Loyalsoldier/v2ray-rules-dat</string>
+    <string name="applying_preset">Применение пресета: %1$s</string>
+    <string name="downloading_file">Загрузка %1$s…</string>
 
     <!-- Logs Screen -->
     <string name="toggle_pause">Пауза/Возоновление</string>
@@ -112,4 +142,14 @@
     <string name="notification_channel_name">Состояние сервиса</string>
     <string name="notification_content_active">VPN подключен</string>
     <string name="notification_action_stop">Остановить</string>
+
+    <!-- App Updates -->
+    <string name="app_updates_channel_name">Обновления приложения</string>
+    <string name="update_available_title">Доступно обновление</string>
+    <string name="update_available_text">Доступна новая версия %1$s.</string>
+    <string name="update_dialog_title">Обновление Spectra</string>
+    <string name="update_dialog_message">Доступна новая версия (%1$s). Хотите обновить сейчас?</string>
+    <string name="update_now">Обновить</string>
+    <string name="downloading_update">Загрузка обновления...</string>
+    <string name="update_failed_msg">Не удалось загрузить обновление.</string>
 </resources>

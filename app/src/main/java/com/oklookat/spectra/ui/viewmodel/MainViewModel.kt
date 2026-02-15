@@ -3,6 +3,7 @@ package com.oklookat.spectra.ui.viewmodel
 import android.app.Application
 import android.content.pm.verify.domain.DomainVerificationManager
 import android.content.pm.verify.domain.DomainVerificationUserState
+import android.net.Uri
 import android.os.Build
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -12,6 +13,7 @@ import androidx.lifecycle.viewModelScope
 import com.oklookat.spectra.BuildConfig
 import com.oklookat.spectra.R
 import com.oklookat.spectra.data.repository.ProfileRepository
+import com.oklookat.spectra.data.repository.ResourceRepository
 import com.oklookat.spectra.data.repository.SettingsRepository
 import com.oklookat.spectra.model.AppUpdate
 import com.oklookat.spectra.model.Group
@@ -19,15 +21,19 @@ import com.oklookat.spectra.model.P2PPayload
 import com.oklookat.spectra.model.PendingGroup
 import com.oklookat.spectra.model.PendingProfile
 import com.oklookat.spectra.model.Profile
+import com.oklookat.spectra.model.Resource
 import com.oklookat.spectra.model.Screen
 import com.oklookat.spectra.service.XrayVpnService
 import com.oklookat.spectra.util.AppUpdateWorker
 import com.oklookat.spectra.util.LogManager
 import com.oklookat.spectra.util.P2PClient
 import com.oklookat.spectra.util.P2PServer
+import com.oklookat.spectra.util.ResourceUpdateWorker
 import com.oklookat.spectra.util.TvUtils
 import com.oklookat.spectra.util.UpdateManager
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.launchIn
@@ -38,11 +44,13 @@ import kotlinx.coroutines.withContext
 class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val profileRepository = ProfileRepository(application)
     private val settingsRepository = SettingsRepository(application)
+    private val resourceRepository = ResourceRepository(application)
     private val updateManager = UpdateManager(application)
     private val p2pClient = P2PClient()
     private var p2pServer: P2PServer? = null
     
     private val UPDATE_URL = BuildConfig.UPDATE_URL
+    private var resourceDownloadJob: Job? = null
 
     companion object {
         private var hasShownVerifyDialogThisSession = false
@@ -65,6 +73,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         
         checkDeepLinkStatus()
         setupAppUpdates()
+        setupResourceUpdates()
         
         // Automatic update check on app launch if enabled
         if (UPDATE_URL.isNotBlank()) {
@@ -76,6 +85,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         uiState = uiState.copy(
             groups = profileRepository.getGroups(),
             profiles = profileRepository.getProfiles(),
+            resources = resourceRepository.getResources(),
             selectedProfileId = profileRepository.getSelectedProfileId(),
             settings = SettingsState(
                 useDebugConfig = settingsRepository.useDebugConfig,
@@ -91,6 +101,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private fun setupAppUpdates() {
         AppUpdateWorker.setupPeriodicWork(getApplication(), UPDATE_URL)
+    }
+
+    private fun setupResourceUpdates() {
+        ResourceUpdateWorker.setupPeriodicWork(getApplication())
     }
 
     fun checkForUpdatesManually() {
@@ -123,6 +137,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     override fun onCleared() {
         super.onCleared()
         stopP2PServer()
+        resourceDownloadJob?.cancel()
     }
 
     fun updateVpnStatus() {
@@ -141,6 +156,193 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun getSelectedProfileContent(): String? {
         val profile = uiState.profiles.find { it.id == uiState.selectedProfileId } ?: return null
         return profileRepository.getProfileContent(profile)
+    }
+
+    // --- Resource Operations ---
+
+    fun applyResourcePreset(type: ResourcePresetType) {
+        resourceDownloadJob?.cancel()
+        resourceDownloadJob = viewModelScope.launch {
+            uiState = uiState.copy(
+                isDownloadingResource = true, 
+                resourceDownloadProgress = 0f,
+                resourceDownloadProgress2 = 0f,
+                currentDownloadingResourceName = null,
+                currentDownloadingResourceName2 = null
+            )
+            LogManager.addLog("[Resource] Applying preset: $type")
+            
+            try {
+                when (type) {
+                    ResourcePresetType.SYSTEM -> {
+                        resourceRepository.deleteResource("geoip.dat")
+                        resourceRepository.deleteResource("geosite.dat")
+                        LogManager.addLog("[Resource] Preset System: Custom geo-files deleted")
+                    }
+                    ResourcePresetType.RUNETFREEDOM -> {
+                        val geoipUrl = "https://github.com/runetfreedom/russia-v2ray-rules-dat/raw/refs/heads/release/geoip.dat"
+                        val geositeUrl = "https://github.com/runetfreedom/russia-v2ray-rules-dat/raw/refs/heads/release/geosite.dat"
+                        downloadTwoFilesParallel(geoipUrl, geositeUrl)
+                    }
+                    ResourcePresetType.LOYAL_SOLDIER -> {
+                        val geoipUrl = "https://github.com/Loyalsoldier/v2ray-rules-dat/raw/refs/heads/release/geoip.dat"
+                        val geositeUrl = "https://github.com/Loyalsoldier/v2ray-rules-dat/raw/refs/heads/release/geosite.dat"
+                        downloadTwoFilesParallel(geoipUrl, geositeUrl)
+                    }
+                }
+                uiState = uiState.copy(resources = resourceRepository.getResources())
+                _events.emit(MainUiEvent.ShowToast(messageResId = R.string.all_resources_reloaded))
+            } catch (e: Exception) {
+                val error = e.message ?: "Error"
+                LogManager.addLog("[Resource] Preset error: $error")
+                _events.emit(MainUiEvent.ShowToast(message = error))
+            } finally {
+                uiState = uiState.copy(
+                    isDownloadingResource = false,
+                    currentDownloadingResourceName = null,
+                    currentDownloadingResourceName2 = null
+                )
+            }
+        }
+    }
+
+    private suspend fun downloadTwoFilesParallel(geoipUrl: String, geositeUrl: String) = withContext(Dispatchers.IO) {
+        uiState = uiState.copy(currentDownloadingResourceName = "geoip.dat", currentDownloadingResourceName2 = "geosite.dat")
+        
+        val d1 = async {
+            resourceRepository.addOrUpdateResource("geoip.dat", geoipUrl, true, 24) { progress ->
+                uiState = uiState.copy(resourceDownloadProgress = progress)
+            }
+        }
+        
+        val d2 = async {
+            resourceRepository.addOrUpdateResource("geosite.dat", geositeUrl, true, 24) { progress ->
+                uiState = uiState.copy(resourceDownloadProgress2 = progress)
+            }
+        }
+        
+        val r1 = d1.await()
+        val r2 = d2.await()
+        
+        if (r1.isFailure) throw r1.exceptionOrNull() ?: Exception("Failed to download geoip.dat")
+        if (r2.isFailure) throw r2.exceptionOrNull() ?: Exception("Failed to download geosite.dat")
+    }
+
+    fun addRemoteResource(name: String, url: String, autoUpdate: Boolean, interval: Int) {
+        resourceDownloadJob?.cancel()
+        resourceDownloadJob = viewModelScope.launch {
+            uiState = uiState.copy(isDownloadingResource = true, resourceDownloadProgress = 0f, currentDownloadingResourceName = name)
+            val result = resourceRepository.addOrUpdateResource(name, url, autoUpdate, interval) { progress ->
+                uiState = uiState.copy(resourceDownloadProgress = progress)
+            }
+            uiState = uiState.copy(isDownloadingResource = false, currentDownloadingResourceName = null)
+            if (result.isSuccess) {
+                uiState = uiState.copy(resources = resourceRepository.getResources())
+                LogManager.addLog("[Resource] Added: $name from $url")
+                _events.emit(MainUiEvent.ShowToast(messageResId = R.string.resource_added))
+                setupResourceUpdates()
+            } else {
+                val error = result.exceptionOrNull()?.message ?: "Unknown error"
+                if (error != "Job was cancelled") {
+                    LogManager.addLog("[Resource] Error adding $name: $error")
+                    _events.emit(MainUiEvent.ShowToast(message = error))
+                }
+            }
+        }
+    }
+
+    fun cancelResourceDownload() {
+        resourceDownloadJob?.cancel()
+        uiState = uiState.copy(isDownloadingResource = false, currentDownloadingResourceName = null, currentDownloadingResourceName2 = null)
+    }
+
+    fun addLocalResource(name: String, uri: Uri) {
+        viewModelScope.launch {
+            try {
+                val bytes = getApplication<Application>().contentResolver.openInputStream(uri)?.use { it.readBytes() }
+                if (bytes != null) {
+                    val result = resourceRepository.addOrUpdateResource(name, null, false, 0, bytes)
+                    if (result.isSuccess) {
+                        uiState = uiState.copy(resources = resourceRepository.getResources())
+                        LogManager.addLog("[Resource] Added local: $name")
+                        _events.emit(MainUiEvent.ShowToast(messageResId = R.string.resource_added))
+                    } else {
+                        val error = result.exceptionOrNull()?.message ?: "Unknown error"
+                        LogManager.addLog("[Resource] Error adding local $name: $error")
+                        _events.emit(MainUiEvent.ShowToast(message = error))
+                    }
+                }
+            } catch (e: Exception) {
+                val error = e.message ?: "Unknown error"
+                LogManager.addLog("[Resource] Exception adding local $name: $error")
+                _events.emit(MainUiEvent.ShowToast(messageResId = R.string.failed_to_add_resource))
+            }
+        }
+    }
+
+    fun deleteResource(name: String) {
+        viewModelScope.launch {
+            resourceRepository.deleteResource(name)
+            LogManager.addLog("[Resource] Deleted: $name")
+            uiState = uiState.copy(resources = resourceRepository.getResources())
+            setupResourceUpdates()
+        }
+    }
+
+    fun updateResource(resource: Resource) {
+        val url = resource.url ?: return
+        resourceDownloadJob?.cancel()
+        resourceDownloadJob = viewModelScope.launch {
+            uiState = uiState.copy(isDownloadingResource = true, resourceDownloadProgress = 0f, currentDownloadingResourceName = resource.name)
+            val result = resourceRepository.addOrUpdateResource(
+                resource.name, 
+                url, 
+                resource.autoUpdateEnabled, 
+                resource.autoUpdateIntervalHours
+            ) { progress ->
+                uiState = uiState.copy(resourceDownloadProgress = progress)
+            }
+            uiState = uiState.copy(isDownloadingResource = false, currentDownloadingResourceName = null)
+            if (result.isSuccess) {
+                uiState = uiState.copy(resources = resourceRepository.getResources())
+                LogManager.addLog("[Resource] Updated: ${resource.name}")
+                _events.emit(MainUiEvent.ShowToast(messageResId = R.string.resource_updated))
+            } else {
+                val error = result.exceptionOrNull()?.message ?: "Unknown error"
+                if (error != "Job was cancelled") {
+                    LogManager.addLog("[Resource] Update error for ${resource.name}: $error")
+                    _events.emit(MainUiEvent.ShowToast(messageResId = R.string.failed_to_update_resource))
+                }
+            }
+        }
+    }
+
+    fun reloadAllResources() {
+        viewModelScope.launch {
+            val resources = uiState.resources.filter { it.url != null }
+            if (resources.isEmpty()) return@launch
+            
+            uiState = uiState.copy(isDownloadingResource = true, resourceDownloadProgress = 0f)
+            var successCount = 0
+            for (res in resources) {
+                uiState = uiState.copy(currentDownloadingResourceName = res.name)
+                val result = resourceRepository.addOrUpdateResource(res.name, res.url, res.autoUpdateEnabled, res.autoUpdateIntervalHours) { progress ->
+                    uiState = uiState.copy(resourceDownloadProgress = progress)
+                }
+                if (result.isSuccess) {
+                    successCount++
+                } else {
+                    LogManager.addLog("[Resource] Batch update error for ${res.name}: ${result.exceptionOrNull()?.message}")
+                }
+            }
+            uiState = uiState.copy(isDownloadingResource = false, resources = resourceRepository.getResources(), currentDownloadingResourceName = null)
+            
+            if (successCount == resources.size) {
+                _events.emit(MainUiEvent.ShowToast(messageResId = R.string.all_resources_reloaded))
+            } else {
+                _events.emit(MainUiEvent.ShowToast(messageResId = R.string.failed_to_reload_resources))
+            }
+        }
     }
 
     // --- Group Operations ---
@@ -618,4 +820,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             vpnMtu = mtu
         ))
     }
+}
+
+enum class ResourcePresetType {
+    SYSTEM, RUNETFREEDOM, LOYAL_SOLDIER
 }

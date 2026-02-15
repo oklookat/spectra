@@ -7,6 +7,7 @@ import com.oklookat.spectra.model.P2PPayload
 import com.oklookat.spectra.model.PendingGroup
 import com.oklookat.spectra.model.PendingProfile
 import com.oklookat.spectra.model.Profile
+import com.oklookat.spectra.model.Resource
 import com.oklookat.spectra.model.Screen
 import com.oklookat.spectra.service.XrayVpnService
 
@@ -25,6 +26,12 @@ data class MainUiState(
     val currentScreen: Screen = Screen.Main,
     val groups: List<Group> = emptyList(),
     val profiles: List<Profile> = emptyList(),
+    val resources: List<Resource> = emptyList(),
+    val isDownloadingResource: Boolean = false,
+    val resourceDownloadProgress: Float = 0f,
+    val resourceDownloadProgress2: Float = 0f, // For second file in preset
+    val currentDownloadingResourceName: String? = null,
+    val currentDownloadingResourceName2: String? = null,
     val selectedProfileId: String? = null,
     val deepLinkProfile: PendingProfile? = null,
     val pendingProfileToReplace: PendingProfile? = null,
