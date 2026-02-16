@@ -116,6 +116,7 @@ class XrayVpnService : VpnService() {
                     Libv2ray.initCoreEnv(filesDir.absolutePath, key)
                 } catch (e: Exception) {
                     Log.e(TAG, "Failed to init core env", e)
+                    LogManager.addLog("[Service] Failed to init core environment: ${e.message}")
                 }
             }
         }
@@ -137,6 +138,7 @@ class XrayVpnService : VpnService() {
 
             if (config.isEmpty()) {
                 Log.e(TAG, "No config found, stopping service")
+                LogManager.addLog("[Service] Stopping: No Xray configuration provided")
                 stopVpn()
                 return@launch
             }
@@ -198,7 +200,9 @@ class XrayVpnService : VpnService() {
 
             val pfd = vpnInterface
             if (pfd == null) {
-                Log.e(TAG, "Failed to establish VPN interface")
+                val errorMsg = "Failed to establish VPN interface: Permission denied or system busy"
+                Log.e(TAG, errorMsg)
+                LogManager.addLog("[Service] $errorMsg")
                 return
             }
 
@@ -230,9 +234,12 @@ class XrayVpnService : VpnService() {
             
             thread(start = true, name = "XrayThread") {
                 try {
+                    LogManager.addLog("[Service] Starting Xray core...")
                     coreController?.startLoop(configJson, fd)
                 } catch (e: Exception) {
-                    Log.e(TAG, "Core loop error", e)
+                    val errorMsg = "Core loop error: ${e.message}"
+                    Log.e(TAG, errorMsg, e)
+                    LogManager.addLog("[Service] $errorMsg")
                 } finally {
                     Log.d(TAG, "Core loop finished")
                 }
@@ -240,7 +247,9 @@ class XrayVpnService : VpnService() {
             
             _isRunning.value = true
         } catch (e: Exception) {
-            Log.e(TAG, "VPN setup failed", e)
+            val errorMsg = "VPN setup failed: ${e.message}"
+            Log.e(TAG, errorMsg, e)
+            LogManager.addLog("[Service] $errorMsg")
             lifecycleLock.withLock {
                 stopCoreLocked()
                 closeVpnInterfaceLocked()
@@ -266,6 +275,7 @@ class XrayVpnService : VpnService() {
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Logcat capture error", e)
+                LogManager.addLog("[Service] Internal logcat capture error")
             } finally {
                 logcatProcess?.destroy()
                 logcatProcess = null
@@ -278,6 +288,7 @@ class XrayVpnService : VpnService() {
             assets.open("config.json").bufferedReader().use { it.readText() }
         } catch (e: Exception) {
             Log.e(TAG, "Failed to load config from assets", e)
+            LogManager.addLog("[Service] Asset error: Failed to load default config.json")
             ""
         }
     }
@@ -320,6 +331,7 @@ class XrayVpnService : VpnService() {
     }
 
     override fun onRevoke() {
+        LogManager.addLog("[Service] VPN permission revoked by system")
         stopVpn()
         super.onRevoke()
     }
@@ -381,12 +393,14 @@ class XrayVpnService : VpnService() {
                     }
                 } catch (e: Exception) {
                     Log.e(TAG, "Asset error: $fileName", e)
+                    LogManager.addLog("[Service] Critical: Failed to copy $fileName from assets")
                 }
             }
         }
     }
 
     override fun onDestroy() {
+        LogManager.addLog("[Service] VPN Service destroyed")
         lifecycleLock.withLock {
             stopCoreLocked()
             closeVpnInterfaceLocked()

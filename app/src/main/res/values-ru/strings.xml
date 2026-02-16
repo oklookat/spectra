@@ -57,8 +57,6 @@
     <string name="tunnel_ipv4">Туннель (IPv4)</string>
     <string name="tunnel_ipv6">Туннель (IPv6)</string>
     <string name="advanced">Дополнительно</string>
-    <string name="debug_mode">Режим отладки</string>
-    <string name="use_test_config">Использовать тестовую конфигурацию из assets</string>
     <string name="address">Адрес</string>
     <string name="dns_server">DNS-сервер</string>
     <string name="mtu">MTU</string>
@@ -116,7 +114,6 @@
     <string name="invalid_link">Некорректная ссылка</string>
     <string name="profile_added">Профиль \'%1$s\' добавлен</string>
     <string name="failed_to_add_profile">Не удалось добавить профиль: %1$s</string>
-    <string name="select_profile_or_debug">Пожалуйста, выберите профиль или включите режим отладки</string>
     <string name="group_added">Группа \'%1$s\' добавлена</string>
     <string name="failed_to_add_group">Не удалось добавить группу: %1$s</string>
     

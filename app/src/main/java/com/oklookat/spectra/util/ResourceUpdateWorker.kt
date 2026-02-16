@@ -18,7 +18,8 @@ class ResourceUpdateWorker @AssistedInject constructor(
     override suspend fun doWork(): Result {
         val resources = try {
             resourceRepository.getResources().filter { it.url != null && it.autoUpdateEnabled }
-        } catch (_: Exception) {
+        } catch (e: Exception) {
+            LogManager.addLog("[ResourceWorker] Failed to fetch resources: ${e.message}")
             return Result.retry()
         }
         
@@ -39,7 +40,8 @@ class ResourceUpdateWorker @AssistedInject constructor(
                             lastUpdated = System.currentTimeMillis()
                         )
                     }
-                } catch (_: Exception) {
+                } catch (e: Exception) {
+                    LogManager.addLog("[ResourceWorker] Failed to update resource '${resource.name}': ${e.message}")
                     hasError = true
                 }
             }

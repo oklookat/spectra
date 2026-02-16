@@ -28,7 +28,7 @@ class ProfileUpdateWorker @AssistedInject constructor(
         } catch (e: Exception) {
             return Result.retry()
         }
-        
+
         for (group in groups) {
             try {
                 profileRepository.updateGroupProfiles(group)
@@ -38,19 +38,19 @@ class ProfileUpdateWorker @AssistedInject constructor(
 
         // 2. Update individual remote profiles
         val profiles = try {
-            profileRepository.getProfiles().filter { 
-                it.isRemote && !it.isImported && it.autoUpdateEnabled && 
+            profileRepository.getProfiles().filter {
+                it.isRemote && !it.isImported && it.autoUpdateEnabled &&
                 (currentTime - it.lastUpdated >= it.autoUpdateIntervalMinutes * 60 * 1000L)
             }
         } catch (e: Exception) {
             return Result.retry()
         }
-        
+
         var hasError = false
         for (profile in profiles) {
             val url = profile.url ?: continue
             val fileName = profile.fileName ?: continue
-            
+
             try {
                 val contentChanged = profileRepository.downloadProfile(url, fileName)
                 val updatedProfile = profile.copy(lastUpdated = System.currentTimeMillis())

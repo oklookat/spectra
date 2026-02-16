@@ -7,6 +7,7 @@ import com.oklookat.spectra.model.Group
 import com.oklookat.spectra.model.Profile
 import com.oklookat.spectra.model.ShareLinkParser
 import com.oklookat.spectra.model.XrayConfigBuild
+import com.oklookat.spectra.util.LogManager
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
@@ -80,6 +81,7 @@ class ProfileRepository @Inject constructor(
             dao.insertGroup(newGroup)
             Result.success(newGroup)
         } catch (e: Exception) {
+            LogManager.addLog("[ProfileRepo] Failed to add remote group '$name': ${e.message}")
             Result.failure(e)
         }
     }
@@ -88,46 +90,55 @@ class ProfileRepository @Inject constructor(
         val url = group.url ?: return@withContext
         val request = Request.Builder().url(url).build()
         
-        client.newCall(request).execute().use { response ->
-            if (!response.isSuccessful) throw Exception("Failed to fetch group: ${response.code}")
-            val body = response.body?.string() ?: throw Exception("Empty response body")
-            
-            val decodedBody = try {
-                String(Base64.decode(body.trim(), Base64.DEFAULT))
-            } catch (e: Exception) {
-                body
+        try {
+            client.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) throw Exception("Failed to fetch group: ${response.code}")
+                val body = response.body?.string() ?: throw Exception("Empty response body")
+                
+                val decodedBody = try {
+                    String(Base64.decode(body.trim(), Base64.DEFAULT))
+                } catch (e: Exception) {
+                    body
+                }
+
+                val links = decodedBody.lines()
+                    .map { it.trim() }
+                    .filter { it.isNotEmpty() && (it.startsWith("vless://") || it.startsWith("vmess://") || it.startsWith("ss://") || it.startsWith("trojan://")) }
+
+                if (links.isEmpty()) {
+                    LogManager.addLog("[ProfileRepo] No valid links found in group '${group.name}'")
+                    return@withContext
+                }
+
+                val currentProfiles = dao.getProfilesByGroup(group.id)
+                currentProfiles.forEach { profile ->
+                    profile.fileName?.let { File(profilesDir, it).delete() }
+                }
+                dao.deleteProfilesByGroup(group.id)
+
+                val newProfiles = links.mapIndexed { index, link ->
+                    val shareLink = ShareLinkParser.parse(link)
+                    val profileId = UUID.randomUUID().toString()
+                    val fileName = "$profileId.txt"
+                    File(profilesDir, fileName).writeText(link)
+
+                    Profile(
+                        id = profileId,
+                        groupId = group.id,
+                        name = shareLink.getDisplayName(),
+                        url = link,
+                        isRemote = true,
+                        isImported = true,
+                        fileName = fileName,
+                        lastUpdated = System.currentTimeMillis()
+                    )
+                }
+                dao.insertProfiles(newProfiles)
+                LogManager.addLog("[ProfileRepo] Updated group '${group.name}' with ${newProfiles.size} profiles")
             }
-
-            val links = decodedBody.lines()
-                .map { it.trim() }
-                .filter { it.isNotEmpty() && (it.startsWith("vless://") || it.startsWith("vmess://") || it.startsWith("ss://") || it.startsWith("trojan://")) }
-
-            if (links.isEmpty()) return@withContext
-
-            val currentProfiles = dao.getProfilesByGroup(group.id)
-            currentProfiles.forEach { profile ->
-                profile.fileName?.let { File(profilesDir, it).delete() }
-            }
-            dao.deleteProfilesByGroup(group.id)
-
-            val newProfiles = links.mapIndexed { index, link ->
-                val shareLink = ShareLinkParser.parse(link)
-                val profileId = UUID.randomUUID().toString()
-                val fileName = "$profileId.txt"
-                File(profilesDir, fileName).writeText(link)
-
-                Profile(
-                    id = profileId,
-                    groupId = group.id,
-                    name = shareLink.getDisplayName(),
-                    url = link,
-                    isRemote = true,
-                    isImported = true,
-                    fileName = fileName,
-                    lastUpdated = System.currentTimeMillis()
-                )
-            }
-            dao.insertProfiles(newProfiles)
+        } catch (e: Exception) {
+            LogManager.addLog("[ProfileRepo] Error updating group '${group.name}': ${e.message}")
+            throw e
         }
     }
 
@@ -186,8 +197,10 @@ class ProfileRepository @Inject constructor(
                 fileName = fileName
             )
             dao.insertProfile(newProfile)
+            LogManager.addLog("[ProfileRepo] Added remote profile '$name'")
             Result.success(newProfile)
         } catch (e: Exception) {
+            LogManager.addLog("[ProfileRepo] Failed to add remote profile '$name': ${e.message}")
             Result.failure(e)
         }
     }
@@ -255,6 +268,7 @@ class ProfileRepository @Inject constructor(
                     content
                 }
             } catch (e: Exception) {
+                LogManager.addLog("[ProfileRepo] Error parsing share link for '${profile.name}': ${e.message}")
                 content
             }
         }

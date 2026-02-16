@@ -108,6 +108,7 @@ class MainViewModel @Inject constructor(
             }
             uiState = uiState.copy(isDownloadingUpdate = false)
             if (!success) {
+                LogManager.addLog("[App] Update download or installation failed")
                 _events.emit(MainUiEvent.ShowToast(messageResId = R.string.update_failed_msg))
             }
         }
@@ -117,7 +118,12 @@ class MainViewModel @Inject constructor(
         uiState = uiState.copy(currentScreen = screen)
     }
 
-    suspend fun prepareVpnConfig(): String = prepareVpnConfigUseCase()
+    suspend fun prepareVpnConfig(): String = try {
+        prepareVpnConfigUseCase()
+    } catch (e: Exception) {
+        LogManager.addLog("[App] Failed to prepare VPN config: ${e.message}")
+        ""
+    }
 
     fun checkDeepLinkStatus() {
         uiState = uiState.copy(isDeepLinkVerified = checkDeepLinkStatusUseCase())
