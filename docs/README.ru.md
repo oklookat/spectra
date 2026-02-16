@@ -12,6 +12,82 @@
 
 Основные источники вдохновения: [sing-box-for-android](https://github.com/SagerNet/sing-box-for-android), [v2rayNG](https://github.com/2dust/v2rayNG).
 
+## Что сломано
+
+- Система подписок (vless:// и так далее). Импортируются, но надо написать нормальный парсер и редактор конфига.
+
+- Пока нормально работает полный конфиг Xray. Пример конфига:
+
+```json
+{
+    "log": {
+        "loglevel": "warning"
+    },
+    "dns": {
+        "queryStrategy": "UseIPv4",
+        "servers": [
+            {
+                "address": "https://1.1.1.1/dns-query"
+            }
+        ]
+    },
+    "routing": {
+        "domainStrategy": "AsIs",
+        "rules": [
+            {
+                "type": "field",
+                "inboundTag": [
+                    "tun-in"
+                ],
+                "port": "53",
+                "outboundTag": "dns-out"
+            }
+        ]
+    },
+    "inbounds": [
+        {
+            "protocol": "tun",
+            "tag": "tun-in",
+            "settings": {
+                "MTU": 9000
+            },
+            "sniffing": {
+                "enabled": true,
+                "destOverride": [
+                    "http",
+                    "tls"
+                ]
+            }
+        }
+    ],
+    "outbounds": [
+        {
+            "tag": "direct-out",
+            "protocol": "freedom",
+            "settings": {
+                "targetStrategy": "UseIPv4"
+            }
+        },
+        {
+            "protocol": "dns",
+            "tag": "dns-out",
+            "settings": {
+                "nonIPQuery": "skip"
+            }
+        },
+        {
+            "tag": "block-out",
+            "protocol": "blackhole",
+            "settings": {
+                "response": {
+                    "type": "http"
+                }
+            }
+        }
+    ]
+}
+```
+
 ## Что реализовано (на бумаге)
 
 - Английская, русская локализация
@@ -36,7 +112,7 @@
 
 - Группы
 
--  Добавление своих гео-файлов Xray
+- Добавление своих гео-файлов Xray
 
 ## Почему на бумаге
 

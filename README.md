@@ -14,6 +14,82 @@ The project is unstable, so it may change drastically over time.
 
 Main sources of inspiration: [sing-box-for-android](https://github.com/SagerNet/sing-box-for-android), [v2rayNG](https://github.com/2dust/v2rayNG).
 
+## What's broken
+
+- Subscription system (vless:// and so on). They are imported, but a proper parser and config editor need to be written.
+
+- Full Xray config works fine for now. Config example:
+
+```json
+{
+    "log": {
+        "loglevel": "warning"
+    },
+    "dns": {
+        "queryStrategy": "UseIPv4",
+        "servers": [
+            {
+                "address": "https://1.1.1.1/dns-query"
+            }
+        ]
+    },
+    "routing": {
+        "domainStrategy": "AsIs",
+        "rules": [
+            {
+                "type": "field",
+                "inboundTag": [
+                    "tun-in"
+                ],
+                "port": "53",
+                "outboundTag": "dns-out"
+            }
+        ]
+    },
+    "inbounds": [
+        {
+            "protocol": "tun",
+            "tag": "tun-in",
+            "settings": {
+                "MTU": 9000
+            },
+            "sniffing": {
+                "enabled": true,
+                "destOverride": [
+                    "http",
+                    "tls"
+                ]
+            }
+        }
+    ],
+    "outbounds": [
+        {
+            "tag": "direct-out",
+            "protocol": "freedom",
+            "settings": {
+                "targetStrategy": "UseIPv4"
+            }
+        },
+        {
+            "protocol": "dns",
+            "tag": "dns-out",
+            "settings": {
+                "nonIPQuery": "skip"
+            }
+        },
+        {
+            "tag": "block-out",
+            "protocol": "blackhole",
+            "settings": {
+                "response": {
+                    "type": "http"
+                }
+            }
+        }
+    ]
+}
+```
+
 ## Features (on paper)
 
 * English, Russian translation
