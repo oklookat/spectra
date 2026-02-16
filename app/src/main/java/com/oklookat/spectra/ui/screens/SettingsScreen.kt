@@ -15,18 +15,12 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.oklookat.spectra.BuildConfig
 import com.oklookat.spectra.R
-import com.oklookat.spectra.util.TvUtils
+import com.oklookat.spectra.ui.viewmodel.SettingsState
 
 @Composable
 fun SettingsScreen(
-    useDebugConfig: Boolean,
-    isIpv6Enabled: Boolean,
+    uiState: SettingsState,
     isVpnEnabled: Boolean,
-    vpnAddress: String,
-    vpnDns: String,
-    vpnAddressIpv6: String,
-    vpnDnsIpv6: String,
-    vpnMtu: Int,
     isDeepLinkVerified: Boolean,
     isTv: Boolean,
     onToggleDebug: (Boolean) -> Unit,
@@ -57,7 +51,7 @@ fun SettingsScreen(
             leadingContent = { Icon(Icons.Default.Public, contentDescription = null) },
             trailingContent = {
                 Switch(
-                    checked = isIpv6Enabled,
+                    checked = uiState.isIpv6Enabled,
                     onCheckedChange = onToggleIpv6,
                     enabled = !isVpnEnabled
                 )
@@ -69,20 +63,20 @@ fun SettingsScreen(
         SettingsSectionTitle(stringResource(R.string.tunnel_ipv4))
 
         TunnelSettings(
-            address = vpnAddress,
-            dns = vpnDns,
+            address = uiState.vpnAddress,
+            dns = uiState.vpnDns,
             enabled = !isVpnEnabled,
-            onUpdate = { addr, dns -> onUpdateTunnel(addr, dns, vpnAddressIpv6, vpnDnsIpv6, vpnMtu) }
+            onUpdate = { addr, dns -> onUpdateTunnel(addr, dns, uiState.vpnAddressIpv6, uiState.vpnDnsIpv6, uiState.vpnMtu) }
         )
 
-        if (isIpv6Enabled) {
+        if (uiState.isIpv6Enabled) {
             HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp))
             SettingsSectionTitle(stringResource(R.string.tunnel_ipv6))
             TunnelSettings(
-                address = vpnAddressIpv6,
-                dns = vpnDnsIpv6,
+                address = uiState.vpnAddressIpv6,
+                dns = uiState.vpnDnsIpv6,
                 enabled = !isVpnEnabled,
-                onUpdate = { addr, dns -> onUpdateTunnel(vpnAddress, vpnDns, addr, dns, vpnMtu) }
+                onUpdate = { addr, dns -> onUpdateTunnel(uiState.vpnAddress, uiState.vpnDns, addr, dns, uiState.vpnMtu) }
             )
         }
 
@@ -90,13 +84,13 @@ fun SettingsScreen(
         SettingsSectionTitle(stringResource(R.string.advanced))
 
         // MTU Setting
-        var mtuText by remember(vpnMtu) { mutableStateOf(vpnMtu.toString()) }
+        var mtuText by remember(uiState.vpnMtu) { mutableStateOf(uiState.vpnMtu.toString()) }
         OutlinedTextField(
             value = mtuText,
             onValueChange = { 
                 mtuText = it
                 it.toIntOrNull()?.let { mtu ->
-                    onUpdateTunnel(vpnAddress, vpnDns, vpnAddressIpv6, vpnDnsIpv6, mtu)
+                    onUpdateTunnel(uiState.vpnAddress, uiState.vpnDns, uiState.vpnAddressIpv6, uiState.vpnDnsIpv6, mtu)
                 }
             },
             label = { Text(stringResource(R.string.mtu)) },
@@ -165,7 +159,7 @@ fun SettingsScreen(
                 leadingContent = { Icon(Icons.Default.BugReport, contentDescription = null) },
                 trailingContent = {
                     Switch(
-                        checked = useDebugConfig,
+                        checked = uiState.useDebugConfig,
                         onCheckedChange = onToggleDebug,
                         enabled = !isVpnEnabled
                     )

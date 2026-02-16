@@ -19,6 +19,7 @@ import androidx.activity.viewModels
 import androidx.compose.runtime.LaunchedEffect
 import androidx.core.content.ContextCompat
 import androidx.core.net.toUri
+import androidx.lifecycle.lifecycleScope
 import com.oklookat.spectra.model.Screen
 import com.oklookat.spectra.service.XrayVpnService
 import com.oklookat.spectra.ui.SpectraApp
@@ -29,6 +30,7 @@ import com.oklookat.spectra.util.DeepLinkHandler
 import com.oklookat.spectra.util.ProfileUpdateWorker
 import com.oklookat.spectra.util.TvUtils
 import dagger.hilt.android.AndroidEntryPoint
+import kotlinx.coroutines.launch
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
@@ -39,7 +41,6 @@ class MainActivity : ComponentActivity() {
     private val connection = object : ServiceConnection {
         override fun onServiceConnected(className: ComponentName, service: IBinder) {
             isBound = true
-            viewModel.updateVpnStatus()
         }
 
         override fun onServiceDisconnected(arg0: ComponentName) {
@@ -60,7 +61,6 @@ class MainActivity : ComponentActivity() {
             startVpnService()
         } else {
             Toast.makeText(this, getString(R.string.vpn_permission_denied), Toast.LENGTH_SHORT).show()
-            viewModel.updateVpnStatus()
         }
     }
 
@@ -80,7 +80,6 @@ class MainActivity : ComponentActivity() {
                 }
 
                 SpectraApp(
-                    viewModel = viewModel,
                     onToggleVpn = { enabled ->
                         if (enabled) tryStartVpn() else stopVpnService()
                     }
@@ -148,7 +147,6 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
-        viewModel.updateVpnStatus()
         viewModel.checkDeepLinkStatus()
     }
 
@@ -165,34 +163,31 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun startVpnService() {
-        val uiState = viewModel.uiState
-        val settings = uiState.settings
-        
-        val config = if (!settings.useDebugConfig) {
-            viewModel.getSelectedProfileContent()
-        } else ""
+        lifecycleScope.launch {
+            val config = viewModel.prepareVpnConfig()
+            val uiState = viewModel.uiState
+            val settings = uiState.settings
 
-        if (!settings.useDebugConfig && config.isNullOrEmpty()) {
-            Toast.makeText(this, getString(R.string.select_profile_or_debug), Toast.LENGTH_LONG).show()
-            viewModel.updateVpnStatus()
-            return
+            if (!settings.useDebugConfig && config.isEmpty()) {
+                Toast.makeText(this@MainActivity, getString(R.string.select_profile_or_debug), Toast.LENGTH_LONG).show()
+                return@launch
+            }
+
+            XrayVpnService.startOrRestart(
+                context = this@MainActivity,
+                configJson = config,
+                profileId = if (settings.useDebugConfig) null else uiState.selectedProfileId,
+                enableIpv6 = settings.isIpv6Enabled,
+                vpnAddress = settings.vpnAddress,
+                vpnDns = settings.vpnDns,
+                vpnAddressIpv6 = settings.vpnAddressIpv6,
+                vpnDnsIpv6 = settings.vpnDnsIpv6,
+                vpnMtu = settings.vpnMtu
+            )
+            
+            val bindIntent = Intent(this@MainActivity, XrayVpnService::class.java)
+            bindService(bindIntent, connection, BIND_AUTO_CREATE)
         }
-
-        XrayVpnService.startOrRestart(
-            context = this,
-            configJson = config ?: "",
-            profileId = if (settings.useDebugConfig) null else uiState.selectedProfileId,
-            enableIpv6 = settings.isIpv6Enabled,
-            vpnAddress = settings.vpnAddress,
-            vpnDns = settings.vpnDns,
-            vpnAddressIpv6 = settings.vpnAddressIpv6,
-            vpnDnsIpv6 = settings.vpnDnsIpv6,
-            vpnMtu = settings.vpnMtu
-        )
-        
-        val bindIntent = Intent(this, XrayVpnService::class.java)
-        bindService(bindIntent, connection, BIND_AUTO_CREATE)
-        viewModel.updateVpnStatus()
     }
 
     private fun stopVpnService() {
@@ -204,7 +199,6 @@ class MainActivity : ComponentActivity() {
             action = XrayVpnService.ACTION_STOP
         }
         startService(intent)
-        viewModel.updateVpnStatus()
     }
 
     override fun onDestroy() {

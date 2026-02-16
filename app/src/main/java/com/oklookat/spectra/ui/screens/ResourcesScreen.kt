@@ -22,13 +22,16 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.oklookat.spectra.R
 import com.oklookat.spectra.model.Resource
-import com.oklookat.spectra.model.Screen
-import com.oklookat.spectra.ui.viewmodel.MainViewModel
 import com.oklookat.spectra.ui.viewmodel.ResourcePresetType
+import com.oklookat.spectra.ui.viewmodel.ResourcesViewModel
+import androidx.hilt.navigation.compose.hiltViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ResourcesScreen(viewModel: MainViewModel) {
+fun ResourcesScreen(
+    viewModel: ResourcesViewModel = hiltViewModel(),
+    onBack: () -> Unit
+) {
     val uiState = viewModel.uiState
     var showAddDialog by remember { mutableStateOf(false) }
     var showPresetsMenu by remember { mutableStateOf(false) }
@@ -38,7 +41,7 @@ fun ResourcesScreen(viewModel: MainViewModel) {
             TopAppBar(
                 title = { Text(stringResource(R.string.resources)) },
                 navigationIcon = {
-                    IconButton(onClick = { viewModel.setScreen(Screen.Settings) }) {
+                    IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null)
                     }
                 },
@@ -125,9 +128,6 @@ fun ResourcesScreen(viewModel: MainViewModel) {
     }
 
     if (showAddDialog) {
-        // Find if the resource being added is currently downloading
-        val addingResourceName = remember(showAddDialog) { "" } // This would need better tracking if we wanted it in dialog
-        
         AddResourceDialog(
             isDownloading = uiState.isDownloadingResource,
             downloadProgress = uiState.downloadingResources.values.firstOrNull() ?: 0f,

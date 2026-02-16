@@ -23,30 +23,37 @@ import androidx.compose.ui.unit.dp
 import com.oklookat.spectra.BuildConfig
 import com.oklookat.spectra.R
 import com.oklookat.spectra.ui.components.LinkItem
+import com.oklookat.spectra.ui.viewmodel.HomeUiState
 import com.oklookat.spectra.util.TvUtils
 import libv2ray.Libv2ray
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MainScreen(
-    isVpnEnabled: Boolean,
-    onToggleVpn: (Boolean) -> Unit
+    uiState: HomeUiState,
+    onToggleVpn: (Boolean) -> Unit,
+    onSelectProfile: (String?) -> Unit
 ) {
     val context = LocalContext.current
     val isTv = TvUtils.isTv(context)
 
     if (isTv) {
-        TvMainScreen(isVpnEnabled = isVpnEnabled, onToggleVpn = onToggleVpn)
+        TvMainScreen(isVpnEnabled = uiState.isVpnEnabled, onToggleVpn = onToggleVpn)
     } else {
-        MobileMainScreen(isVpnEnabled = isVpnEnabled, onToggleVpn = onToggleVpn)
+        MobileMainScreen(
+            uiState = uiState,
+            onToggleVpn = onToggleVpn,
+            onSelectProfile = onSelectProfile
+        )
     }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun MobileMainScreen(
-    isVpnEnabled: Boolean,
-    onToggleVpn: (Boolean) -> Unit
+    uiState: HomeUiState,
+    onToggleVpn: (Boolean) -> Unit,
+    onSelectProfile: (String?) -> Unit
 ) {
     val haptic = LocalHapticFeedback.current
     val configuration = LocalConfiguration.current
@@ -69,7 +76,7 @@ private fun MobileMainScreen(
         floatingActionButton = {
             if (isLandscape) {
                 VpnToggleButton(
-                    isVpnEnabled = isVpnEnabled,
+                    isVpnEnabled = uiState.isVpnEnabled,
                     onToggleVpn = {
                         haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                         onToggleVpn(it)
@@ -110,7 +117,7 @@ private fun MobileMainScreen(
                 Spacer(modifier = Modifier.weight(1f))
 
                 VpnToggleButton(
-                    isVpnEnabled = isVpnEnabled,
+                    isVpnEnabled = uiState.isVpnEnabled,
                     onToggleVpn = {
                         haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                         onToggleVpn(it)
