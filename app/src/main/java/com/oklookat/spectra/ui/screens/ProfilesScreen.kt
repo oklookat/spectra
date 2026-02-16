@@ -4,23 +4,30 @@ import android.content.Intent
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.FormatListBulleted
+import androidx.compose.material.icons.automirrored.filled.Sort
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.oklookat.spectra.R
 import com.oklookat.spectra.model.Group
 import com.oklookat.spectra.model.Profile
 import com.oklookat.spectra.ui.components.*
 import com.oklookat.spectra.ui.viewmodel.MainViewModel
+import com.oklookat.spectra.ui.viewmodel.ProfileSort
 import com.oklookat.spectra.ui.viewmodel.ProfilesViewModel
 import com.oklookat.spectra.util.TvUtils
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -35,6 +42,7 @@ fun ProfilesScreen(
     val isTv = remember { TvUtils.isTv(context) }
     val uiState = viewModel.uiState
     val mainUiState = mainViewModel.uiState
+    val listState = rememberLazyListState()
     
     var selectedGroupIndex by remember { mutableIntStateOf(0) }
     val selectedGroup = remember(selectedGroupIndex, uiState.groups) {
@@ -42,10 +50,21 @@ fun ProfilesScreen(
         else uiState.groups.getOrNull(selectedGroupIndex - 1)
     }
 
+    // Scroll to top when group changes
+    LaunchedEffect(selectedGroupIndex) {
+        listState.scrollToItem(0)
+    }
+
+    // Scroll to top when sort order changes
+    LaunchedEffect(uiState.sortOrder) {
+        listState.scrollToItem(0)
+    }
+
     var showMenu by remember { mutableStateOf(false) }
     var showGroupDialog by remember { mutableStateOf(false) }
     var editingGroup by remember { mutableStateOf<Group?>(null) }
     var showGroupMenu by remember { mutableStateOf(false) }
+    var showSortMenu by remember { mutableStateOf(false) }
     
     var showRemoteDialog by remember { mutableStateOf(false) }
     var showLocalDialog by remember { mutableStateOf(false) }
@@ -54,11 +73,6 @@ fun ProfilesScreen(
     
     var selectedIds by remember { mutableStateOf(setOf<String>()) }
     val isSelectionMode = selectedIds.isNotEmpty()
-
-    // P2P State
-    var showScanner by remember { mutableStateOf(false) }
-    var profileToSend by remember { mutableStateOf<Profile?>(null) }
-    var groupToSend by remember { mutableStateOf<Group?>(null) }
 
     val filePicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
         uri?.let {
@@ -100,18 +114,18 @@ fun ProfilesScreen(
                 onShowGroupMenu = showGroupMenu,
                 onDismissGroupMenu = { showGroupMenu = false },
                 onShareGroup = {
-                    groupToSend = selectedGroup
-                    showScanner = true
+                    // TODO: Implement P2P Sharing
                 },
                 onEditGroup = {
                     editingGroup = selectedGroup
                     showGroupDialog = true
                 },
-                onRefreshGroup = { viewModel.refreshGroup(selectedGroup!!) },
+                onRefresh = { viewModel.refresh(selectedGroup?.id) },
                 onDeleteGroup = { viewModel.deleteGroup(selectedGroup!!.id) },
+                onPingAll = { viewModel.measureAllPings(selectedGroup?.id) },
+                onShowSortMenu = { showSortMenu = true },
                 // TV Actions
-                onAddProfileClick = { showMenu = true },
-                onRefreshAll = { viewModel.refreshRemoteProfiles() }
+                onAddProfileClick = { showMenu = true }
             )
         },
         floatingActionButton = {
@@ -120,7 +134,6 @@ fun ProfilesScreen(
                     onShowMenu = { showMenu = true },
                     showMenu = showMenu,
                     onDismissMenu = { showMenu = false },
-                    onRefreshAll = { viewModel.refreshRemoteProfiles() },
                     onP2PReceive = { mainViewModel.startP2PServer() },
                     onAddRemote = {
                         editingProfile = null
@@ -136,9 +149,21 @@ fun ProfilesScreen(
             }
         }
     ) { padding ->
-        val filteredProfiles = remember(selectedGroup, uiState.profiles) {
-            if (selectedGroup == null) uiState.profiles
+        val filteredProfiles = remember(selectedGroup, uiState.profiles, uiState.sortOrder) {
+            val baseList = if (selectedGroup == null) uiState.profiles
             else uiState.profiles.filter { it.groupId == selectedGroup.id }
+
+            when (uiState.sortOrder) {
+                ProfileSort.AS_IS -> baseList
+                ProfileSort.BY_NAME_ASC -> baseList.sortedBy { it.name.lowercase() }
+                ProfileSort.BY_NAME_DESC -> baseList.sortedByDescending { it.name.lowercase() }
+                ProfileSort.BY_PING_ASC -> baseList.sortedWith(compareBy<Profile> { 
+                    if (it.lastPing < 0) Long.MAX_VALUE else it.lastPing 
+                }.thenBy { it.name.lowercase() })
+                ProfileSort.BY_PING_DESC -> baseList.sortedWith(compareByDescending<Profile> { 
+                    if (it.lastPing < 0) -1L else it.lastPing 
+                }.thenBy { it.name.lowercase() })
+            }
         }
 
         Box(
@@ -147,6 +172,7 @@ fun ProfilesScreen(
                 .padding(padding)
         ) {
             LazyColumn(
+                state = listState,
                 modifier = Modifier.fillMaxSize(),
                 contentPadding = PaddingValues(16.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
@@ -184,11 +210,13 @@ fun ProfilesScreen(
                             viewModel.refreshRemoteProfiles(setOf(profile.id))
                         },
                         onShareP2PClick = {
-                            profileToSend = profile
-                            showScanner = true
+                            // TODO: Implement P2P Sharing
                         },
                         onDeleteClick = {
                             viewModel.deleteProfiles(setOf(profile.id))
+                        },
+                        onPingClick = {
+                            viewModel.measurePing(profile)
                         }
                     )
                 }
@@ -201,6 +229,22 @@ fun ProfilesScreen(
                     style = MaterialTheme.typography.bodyLarge
                 )
             }
+        }
+    }
+
+    if (showSortMenu) {
+        if (isTv) {
+            SortDialog(
+                selectedSort = uiState.sortOrder,
+                onSortSelected = { viewModel.setSortOrder(it) },
+                onDismiss = { showSortMenu = false }
+            )
+        } else {
+            SortBottomSheet(
+                selectedSort = uiState.sortOrder,
+                onSortSelected = { viewModel.setSortOrder(it) },
+                onDismiss = { showSortMenu = false }
+            )
         }
     }
 
@@ -313,6 +357,145 @@ fun ProfilesScreen(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
+private fun SortBottomSheet(
+    selectedSort: ProfileSort,
+    onSortSelected: (ProfileSort) -> Unit,
+    onDismiss: () -> Unit
+) {
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = rememberModalBottomSheetState()
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 24.dp)
+        ) {
+            Text(
+                text = stringResource(R.string.sort),
+                style = MaterialTheme.typography.titleLarge,
+                modifier = Modifier.padding(16.dp)
+            )
+            SortOptionsList(selectedSort, onSortSelected, onDismiss)
+        }
+    }
+}
+
+@Composable
+private fun SortDialog(
+    selectedSort: ProfileSort,
+    onSortSelected: (ProfileSort) -> Unit,
+    onDismiss: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.sort)) },
+        text = {
+            Column {
+                SortOptionsList(selectedSort, onSortSelected, onDismiss)
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(android.R.string.cancel))
+            }
+        }
+    )
+}
+
+@Composable
+private fun SortOptionsList(
+    selectedSort: ProfileSort,
+    onSortSelected: (ProfileSort) -> Unit,
+    onDismiss: () -> Unit
+) {
+    Column {
+        SortItem(
+            sort = ProfileSort.AS_IS,
+            isSelected = selectedSort == ProfileSort.AS_IS,
+            onClick = { onSortSelected(ProfileSort.AS_IS); onDismiss() }
+        )
+        HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+        
+        SortItem(
+            sort = ProfileSort.BY_NAME_ASC,
+            isSelected = selectedSort == ProfileSort.BY_NAME_ASC,
+            onClick = { onSortSelected(ProfileSort.BY_NAME_ASC); onDismiss() }
+        )
+        SortItem(
+            sort = ProfileSort.BY_NAME_DESC,
+            isSelected = selectedSort == ProfileSort.BY_NAME_DESC,
+            onClick = { onSortSelected(ProfileSort.BY_NAME_DESC); onDismiss() }
+        )
+        HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+        
+        SortItem(
+            sort = ProfileSort.BY_PING_ASC,
+            isSelected = selectedSort == ProfileSort.BY_PING_ASC,
+            onClick = { onSortSelected(ProfileSort.BY_PING_ASC); onDismiss() }
+        )
+        SortItem(
+            sort = ProfileSort.BY_PING_DESC,
+            isSelected = selectedSort == ProfileSort.BY_PING_DESC,
+            onClick = { onSortSelected(ProfileSort.BY_PING_DESC); onDismiss() }
+        )
+    }
+}
+
+@Composable
+private fun SortItem(
+    sort: ProfileSort,
+    isSelected: Boolean,
+    onClick: () -> Unit
+) {
+    val label = when (sort) {
+        ProfileSort.AS_IS -> stringResource(R.string.sort_as_is)
+        ProfileSort.BY_NAME_ASC -> stringResource(R.string.sort_by_name_asc)
+        ProfileSort.BY_NAME_DESC -> stringResource(R.string.sort_by_name_desc)
+        ProfileSort.BY_PING_ASC -> stringResource(R.string.sort_by_ping_asc)
+        ProfileSort.BY_PING_DESC -> stringResource(R.string.sort_by_ping_desc)
+    }
+    val icon = when (sort) {
+        ProfileSort.AS_IS -> Icons.AutoMirrored.Filled.FormatListBulleted
+        ProfileSort.BY_NAME_ASC -> Icons.Default.SortByAlpha
+        ProfileSort.BY_NAME_DESC -> Icons.Default.SortByAlpha
+        ProfileSort.BY_PING_ASC -> Icons.Default.Speed
+        ProfileSort.BY_PING_DESC -> Icons.Default.Speed
+    }
+
+    val color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+
+    ListItem(
+        headlineContent = { 
+            Text(
+                text = label,
+                color = color,
+                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+            ) 
+        },
+        leadingContent = { 
+            Icon(
+                imageVector = icon, 
+                contentDescription = null,
+                tint = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+            ) 
+        },
+        trailingContent = {
+            if (isSelected) {
+                Icon(
+                    imageVector = Icons.Default.Check,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary
+                )
+            }
+        },
+        colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+        modifier = Modifier.clickable(onClick = onClick)
+    )
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
 private fun ProfilesTopBar(
     isSelectionMode: Boolean,
     selectedCount: Int,
@@ -329,11 +512,12 @@ private fun ProfilesTopBar(
     onDismissGroupMenu: () -> Unit,
     onShareGroup: () -> Unit,
     onEditGroup: () -> Unit,
-    onRefreshGroup: () -> Unit,
+    onRefresh: () -> Unit,
     onDeleteGroup: () -> Unit,
+    onPingAll: () -> Unit = {},
+    onShowSortMenu: () -> Unit = {},
     // TV Actions
-    onAddProfileClick: () -> Unit = {},
-    onRefreshAll: () -> Unit = {}
+    onAddProfileClick: () -> Unit = {}
 ) {
     val context = LocalContext.current
     
@@ -357,23 +541,44 @@ private fun ProfilesTopBar(
                 title = { Text(stringResource(R.string.profiles)) },
                 actions = {
                     if (isTv) {
-                        IconButton(onClick = onRefreshAll) {
-                            Icon(Icons.Default.Refresh, contentDescription = stringResource(R.string.refresh_all_remote))
+                        IconButton(onClick = onRefresh) {
+                            Icon(Icons.Default.Refresh, contentDescription = stringResource(R.string.refresh))
                         }
                         IconButton(onClick = onAddProfileClick) {
                             Icon(Icons.Default.Add, contentDescription = stringResource(R.string.add_profile))
                         }
                     }
-                    
-                    if (selectedGroup != null) {
-                        Box {
-                            IconButton(onClick = onGroupMenuClick) {
-                                Icon(Icons.Default.MoreVert, contentDescription = "Group Actions")
-                            }
-                            DropdownMenu(
-                                expanded = onShowGroupMenu,
-                                onDismissRequest = onDismissGroupMenu
-                            ) {
+
+                    IconButton(onClick = onShowSortMenu) {
+                        Icon(Icons.AutoMirrored.Filled.Sort, contentDescription = stringResource(R.string.sort))
+                    }
+
+                    Box {
+                        IconButton(onClick = onGroupMenuClick) {
+                            Icon(Icons.Default.MoreVert, contentDescription = "Actions")
+                        }
+                        DropdownMenu(
+                            expanded = onShowGroupMenu,
+                            onDismissRequest = onDismissGroupMenu
+                        ) {
+                            DropdownMenuItem(
+                                text = { Text(stringResource(R.string.refresh)) },
+                                leadingIcon = { Icon(Icons.Default.Refresh, contentDescription = null) },
+                                onClick = {
+                                    onDismissGroupMenu()
+                                    onRefresh()
+                                }
+                            )
+                            DropdownMenuItem(
+                                text = { Text(stringResource(R.string.ping)) },
+                                leadingIcon = { Icon(Icons.Default.Speed, contentDescription = null) },
+                                onClick = {
+                                    onDismissGroupMenu()
+                                    onPingAll()
+                                }
+                            )
+                            
+                            if (selectedGroup != null) {
                                 if (!isTv) {
                                     DropdownMenuItem(
                                         text = { Text(stringResource(R.string.share_group)) },
@@ -409,16 +614,6 @@ private fun ProfilesTopBar(
                                             onEditGroup()
                                         }
                                     )
-                                    if (selectedGroup.isRemote) {
-                                        DropdownMenuItem(
-                                            text = { Text(stringResource(R.string.refresh)) },
-                                            leadingIcon = { Icon(Icons.Default.Refresh, contentDescription = null) },
-                                            onClick = {
-                                                onDismissGroupMenu()
-                                                onRefreshGroup()
-                                            }
-                                        )
-                                    }
                                     HorizontalDivider()
                                     DropdownMenuItem(
                                         text = { Text(stringResource(R.string.delete_group)) },
@@ -524,7 +719,6 @@ private fun ProfilesFab(
     onShowMenu: () -> Unit,
     showMenu: Boolean,
     onDismissMenu: () -> Unit,
-    onRefreshAll: () -> Unit,
     onP2PReceive: () -> Unit,
     onAddRemote: () -> Unit,
     onImportFile: () -> Unit,
@@ -538,15 +732,6 @@ private fun ProfilesFab(
             expanded = showMenu,
             onDismissRequest = onDismissMenu
         ) {
-            DropdownMenuItem(
-                text = { Text(stringResource(R.string.refresh_all_remote)) },
-                leadingIcon = { Icon(Icons.Default.Refresh, contentDescription = null) },
-                onClick = {
-                    onDismissMenu()
-                    onRefreshAll()
-                }
-            )
-            HorizontalDivider()
             DropdownMenuItem(
                 text = { Text(stringResource(R.string.p2p_receive)) },
                 leadingIcon = { Icon(Icons.Default.QrCode, contentDescription = null) },

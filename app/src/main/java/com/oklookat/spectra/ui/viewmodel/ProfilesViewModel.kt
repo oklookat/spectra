@@ -19,13 +19,11 @@ import com.oklookat.spectra.service.XrayVpnService
 import com.oklookat.spectra.util.LogManager
 import com.oklookat.spectra.util.TvUtils
 import dagger.hilt.android.lifecycle.HiltViewModel
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import javax.inject.Inject
 
 @HiltViewModel
@@ -43,7 +41,7 @@ class ProfilesViewModel @Inject constructor(
     private val deleteProfilesUseCase: DeleteProfilesUseCase,
     private val saveLocalProfileUseCase: SaveLocalProfileUseCase,
     private val setSelectedProfileIdUseCase: SetSelectedProfileIdUseCase,
-    private val profileRepository: ProfileRepository // Keeping for direct file access methods for now
+    private val profileRepository: ProfileRepository
 ) : AndroidViewModel(application) {
 
     var uiState by mutableStateOf(ProfilesUiState())
@@ -59,8 +57,20 @@ class ProfilesViewModel @Inject constructor(
 
     private fun observeData() {
         getGroupsUseCase()
-            .onEach { groups ->
-                uiState = uiState.copy(groups = groups.ifEmpty { listOf(Group(id = Group.DEFAULT_GROUP_ID, name = "Default")) })
+            .onEach { groupsFromDb ->
+                val defaultGroup = Group(id = Group.DEFAULT_GROUP_ID, name = "Default")
+                val finalGroups = if (groupsFromDb.none { it.id == Group.DEFAULT_GROUP_ID }) {
+                    listOf(defaultGroup) + groupsFromDb
+                } else {
+                    val mutable = groupsFromDb.toMutableList()
+                    val idx = mutable.indexOfFirst { it.id == Group.DEFAULT_GROUP_ID }
+                    if (idx > 0) {
+                        val d = mutable.removeAt(idx)
+                        mutable.add(0, d)
+                    }
+                    mutable
+                }
+                uiState = uiState.copy(groups = finalGroups)
             }
             .launchIn(viewModelScope)
 
@@ -83,6 +93,39 @@ class ProfilesViewModel @Inject constructor(
         }
     }
 
+    fun setSortOrder(sortOrder: ProfileSort) {
+        uiState = uiState.copy(sortOrder = sortOrder)
+    }
+
+    // --- Unified Refresh ---
+
+    fun refresh(groupId: String? = null) {
+        viewModelScope.launch {
+            if (groupId == null) {
+                // 1. "All" Screen: Refresh all remote profiles and all remote groups
+                refreshRemoteProfiles(null)
+                uiState.groups.filter { it.isRemote }.forEach { group ->
+                    refreshGroup(group)
+                }
+            } else {
+                val group = uiState.groups.find { it.id == groupId } ?: return@launch
+                if (group.isRemote) {
+                    // 2. Remote group: Refresh the group itself
+                    refreshGroup(group)
+                } else {
+                    // 3. Local group: Refresh only remote profiles within this group
+                    val profileIds = uiState.profiles
+                        .filter { it.groupId == groupId && it.isRemote && !it.isImported }
+                        .map { it.id }
+                        .toSet()
+                    if (profileIds.isNotEmpty()) {
+                        refreshRemoteProfiles(profileIds)
+                    }
+                }
+            }
+        }
+    }
+
     // --- Group Operations ---
 
     fun saveGroup(
@@ -94,15 +137,16 @@ class ProfilesViewModel @Inject constructor(
         onComplete: () -> Unit
     ) {
         viewModelScope.launch {
-            if (existing == null) {
+            val isDefault = existing?.id == Group.DEFAULT_GROUP_ID
+            val shouldCreateNew = existing == null || (isDefault && !url.isNullOrBlank())
+
+            if (shouldCreateNew) {
                 if (url.isNullOrBlank()) {
                     saveGroupUseCase(Group(name = name))
-                    onComplete()
                 } else {
                     val result = addRemoteGroupUseCase(name, url, autoUpdate, interval)
                     if (result.isSuccess) {
                         _events.emit(MainUiEvent.ShowToast(messageResId = R.string.group_added, formatArgs = listOf(name)))
-                        onComplete()
                     } else {
                         val error = result.exceptionOrNull()?.message ?: "Unknown error"
                         LogManager.addLog("[App] Error adding remote group: $error")
@@ -110,15 +154,15 @@ class ProfilesViewModel @Inject constructor(
                     }
                 }
             } else {
-                val updated = existing.copy(
+                val updated = existing!!.copy(
                     name = name,
                     url = url,
                     autoUpdateEnabled = autoUpdate,
                     autoUpdateIntervalMinutes = interval
                 )
                 saveGroupUseCase(updated)
-                onComplete()
             }
+            onComplete()
         }
     }
 
@@ -175,7 +219,6 @@ class ProfilesViewModel @Inject constructor(
                 val result = addRemoteProfileUseCase(name, url, autoUpdate, interval, groupId)
                 if (result.isSuccess) {
                     _events.emit(MainUiEvent.ShowToast(messageResId = R.string.profile_added, formatArgs = listOf(name)))
-                    onComplete()
                 } else {
                     val error = result.exceptionOrNull()?.message ?: "Unknown error"
                     LogManager.addLog("[App] Error adding remote profile: $error")
@@ -190,8 +233,8 @@ class ProfilesViewModel @Inject constructor(
                 )
                 val needsRestart = updateProfileInternal(updated)
                 if (needsRestart) _events.emit(MainUiEvent.RestartVpn)
-                onComplete()
             }
+            onComplete()
         }
     }
 
@@ -262,7 +305,9 @@ class ProfilesViewModel @Inject constructor(
                 }
             }
             
-            _events.emit(MainUiEvent.ShowToast(messageResId = R.string.profiles_update_result, formatArgs = listOf(success, failed)))
+            if (ids == null) {
+                _events.emit(MainUiEvent.ShowToast(messageResId = R.string.profiles_update_result, formatArgs = listOf(success, failed)))
+            }
             if (needsRestart) _events.emit(MainUiEvent.RestartVpn)
         }
     }
@@ -284,6 +329,25 @@ class ProfilesViewModel @Inject constructor(
     }
 
     fun getProfileContent(profile: Profile): String = profileRepository.getProfileContent(profile) ?: ""
+
+    // --- Ping ---
+
+    fun measurePing(profile: Profile) {
+        viewModelScope.launch {
+            profileRepository.measurePing(profile)
+        }
+    }
+
+    fun measureAllPings(groupId: String? = null) {
+        viewModelScope.launch {
+            val profiles = if (groupId != null) {
+                uiState.profiles.filter { it.groupId == groupId }
+            } else {
+                uiState.profiles
+            }
+            profileRepository.measurePings(profiles)
+        }
+    }
 
     // --- Deep Link Helpers ---
 

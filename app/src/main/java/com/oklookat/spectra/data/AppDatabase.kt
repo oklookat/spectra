@@ -8,7 +8,7 @@ import com.oklookat.spectra.model.Group
 import com.oklookat.spectra.model.Profile
 import com.oklookat.spectra.model.Resource
 
-@Database(entities = [Group::class, Profile::class, Resource::class], version = 1, exportSchema = false)
+@Database(entities = [Group::class, Profile::class, Resource::class], version = 2, exportSchema = false)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun profileDao(): ProfileDao
     abstract fun resourceDao(): ResourceDao

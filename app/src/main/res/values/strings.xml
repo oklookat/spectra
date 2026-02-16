@@ -32,8 +32,9 @@
     <string name="name">Name</string>
     <string name="url">URL</string>
     <string name="auto_update">Auto Update</string>
-    <string name="interval_minutes">Interval (minutes, min 15)</string>
-    <string name="interval_minutes_hourly">Interval (hours, min 1)</string>
+    <string name="auto_update_desc">Check for updates from URL</string>
+    <string name="interval_minutes">Interval (minutes)</string>
+    <string name="interval_minutes_hourly">Interval (hours)</string>
     <string name="add">Add</string>
     <string name="save">Save</string>
     <string name="cancel">Cancel</string>
@@ -50,6 +51,16 @@
     <string name="share_group">Share Group (P2P)</string>
     <string name="share_source_url">Share Source URL</string>
     <string name="url_optional_remote">URL (optional, for remote group)</string>
+    <string name="ping">Ping</string>
+    <string name="sort">Sort</string>
+    <string name="sort_as_is">As is</string>
+    <string name="sort_by_name_asc">Name (A-Z)</string>
+    <string name="sort_by_name_desc">Name (Z-A)</string>
+    <string name="sort_by_ping_asc">Ping (0–100)</string>
+    <string name="sort_by_ping_desc">Ping (100–0)</string>
+    <string name="name_already_exists">Name already exists</string>
+    <string name="invalid_url">Invalid URL</string>
+    <string name="min_15_min">Min 15 min</string>
 
     <!-- Settings Screen -->
     <string name="connection">Connection</string>

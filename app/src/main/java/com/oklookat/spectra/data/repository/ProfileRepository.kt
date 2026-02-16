@@ -10,13 +10,17 @@ import com.oklookat.spectra.model.XrayConfigBuild
 import com.oklookat.spectra.util.LogManager
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.withContext
+import libv2ray.Libv2ray
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.io.File
 import java.io.FileOutputStream
 import java.nio.charset.Charset
+import java.security.SecureRandom
 import java.util.UUID
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -33,16 +37,52 @@ class ProfileRepository @Inject constructor(
         if (!exists()) mkdirs()
     }
 
+    private var isEnvInitialized = false
+
+    companion object {
+        const val DEFAULT_PING_URL = "http://www.google.com/generate_204"
+    }
+
+    // --- Env Initialization ---
+
+    private suspend fun ensureEnvInitialized() = withContext(Dispatchers.IO) {
+        if (isEnvInitialized) return@withContext
+
+        arrayOf("geoip.dat", "geosite.dat").forEach { fileName ->
+            val file = File(context.filesDir, fileName)
+            if (!file.exists()) {
+                try {
+                    context.assets.open(fileName).use { input ->
+                        FileOutputStream(file).use { output -> input.copyTo(output) }
+                    }
+                } catch (e: Exception) {
+                    LogManager.addLog("[ProfileRepo] Asset error: $fileName - ${e.message}")
+                }
+            }
+        }
+
+        try {
+            val bytes = ByteArray(32)
+            SecureRandom().nextBytes(bytes)
+            val key = Base64.encodeToString(bytes, Base64.URL_SAFE or Base64.NO_WRAP or Base64.NO_PADDING)
+            Libv2ray.initCoreEnv(context.filesDir.absolutePath, key)
+            isEnvInitialized = true
+        } catch (e: Exception) {
+            LogManager.addLog("[ProfileRepo] Failed to init core env: ${e.message}")
+        }
+    }
+
     // --- Groups Logic ---
 
     fun getGroupsFlow(): Flow<List<Group>> = dao.getAllGroupsFlow()
 
     suspend fun getGroups(): List<Group> = withContext(Dispatchers.IO) {
         val groups = dao.getAllGroups()
-        if (groups.isEmpty()) {
+        // Ensure Default group always exists in DB
+        if (groups.none { it.id == Group.DEFAULT_GROUP_ID }) {
             val default = createDefaultGroup()
             dao.insertGroup(default)
-            listOf(default)
+            dao.getAllGroups()
         } else {
             groups
         }
@@ -300,5 +340,29 @@ class ProfileRepository @Inject constructor(
         if (oldContent == content) return false
         file.writeText(content)
         return true
+    }
+
+    // --- Ping ---
+
+    suspend fun measurePing(profile: Profile, url: String = DEFAULT_PING_URL): Long = withContext(Dispatchers.IO) {
+        ensureEnvInitialized()
+        val configJson = getProfileContent(profile) ?: return@withContext -1L
+        try {
+            val delay = Libv2ray.measureOutboundDelay(configJson, url)
+            val updatedProfile = profile.copy(lastPing = delay)
+            dao.updateProfile(updatedProfile)
+            delay
+        } catch (e: Exception) {
+            LogManager.addLog("[ProfileRepo] Ping failed for '${profile.name}': ${e.message}")
+            val updatedProfile = profile.copy(lastPing = -1L)
+            dao.updateProfile(updatedProfile)
+            -1L
+        }
+    }
+
+    suspend fun measurePings(profiles: List<Profile>, url: String = DEFAULT_PING_URL) = withContext(Dispatchers.IO) {
+        profiles.map { profile ->
+            async { measurePing(profile, url) }
+        }.awaitAll()
     }
 }

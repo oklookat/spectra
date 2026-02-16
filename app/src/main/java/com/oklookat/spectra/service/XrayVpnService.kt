@@ -132,9 +132,9 @@ class XrayVpnService : VpnService() {
         val profileId = intent?.getStringExtra("PROFILE_ID")
 
         serviceScope.launch {
-            val config = if (configJson.isEmpty()) {
+            val config = configJson.ifEmpty {
                 withContext(Dispatchers.IO) { loadConfigFromAssets() }
-            } else configJson
+            }
 
             if (config.isEmpty()) {
                 Log.e(TAG, "No config found, stopping service")

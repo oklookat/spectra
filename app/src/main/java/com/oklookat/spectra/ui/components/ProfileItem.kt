@@ -18,7 +18,9 @@ import androidx.compose.ui.draw.scale
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.oklookat.spectra.R
 import com.oklookat.spectra.model.Profile
 
@@ -34,7 +36,8 @@ fun ProfileItem(
     onEditClick: () -> Unit,
     onRefreshClick: () -> Unit,
     onShareP2PClick: () -> Unit,
-    onDeleteClick: () -> Unit
+    onDeleteClick: () -> Unit,
+    onPingClick: () -> Unit = {}
 ) {
     var showItemMenu by remember { mutableStateOf(false) }
     var isFocused by remember { mutableStateOf(false) }
@@ -74,8 +77,12 @@ fun ProfileItem(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Icon(
-                imageVector = if (profile.isRemote) Icons.Default.Cloud else Icons.Default.Description, 
-                contentDescription = null,
+                imageVector = when {
+                    isActive -> Icons.Default.CheckCircle
+                    profile.isRemote -> Icons.Default.Cloud
+                    else -> Icons.Default.Description
+                }, 
+                contentDescription = if (isActive) stringResource(R.string.active) else null,
                 tint = if (isActive || isFocused) MaterialTheme.colorScheme.primary else LocalContentColor.current
             )
             Spacer(modifier = Modifier.width(16.dp))
@@ -94,12 +101,20 @@ fun ProfileItem(
                     )
                 }
             }
-            
-            if (isActive) {
-                Icon(
-                    Icons.Default.CheckCircle, 
-                    contentDescription = stringResource(R.string.active),
-                    tint = MaterialTheme.colorScheme.primary,
+
+            if (profile.lastPing >= 0) {
+                val pingColor = when {
+                    profile.lastPing < 200 -> Color(0xFF4CAF50)
+                    profile.lastPing < 500 -> Color(0xFFFFC107)
+                    else -> Color(0xFFF44336)
+                }
+                Text(
+                    text = "${profile.lastPing} ms",
+                    style = MaterialTheme.typography.labelMedium.copy(
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 11.sp
+                    ),
+                    color = pingColor,
                     modifier = Modifier.padding(horizontal = 8.dp)
                 )
             }
@@ -116,6 +131,14 @@ fun ProfileItem(
                     expanded = showItemMenu,
                     onDismissRequest = { showItemMenu = false }
                 ) {
+                    DropdownMenuItem(
+                        text = { Text(stringResource(R.string.ping)) },
+                        leadingIcon = { Icon(Icons.Default.Speed, contentDescription = null) },
+                        onClick = {
+                            showItemMenu = false
+                            onPingClick()
+                        }
+                    )
                     if (!profile.isImported) {
                         DropdownMenuItem(
                             text = { Text(stringResource(R.string.edit)) },

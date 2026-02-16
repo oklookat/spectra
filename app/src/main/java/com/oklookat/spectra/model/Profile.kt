@@ -16,5 +16,6 @@ data class Profile(
     val autoUpdateIntervalMinutes: Int = 15,
     val lastUpdated: Long = 0,
     val fileName: String? = null,
-    val isImported: Boolean = false // If true, it belongs to a remote group and cannot be edited
+    val isImported: Boolean = false, // If true, it belongs to a remote group and cannot be edited
+    val lastPing: Long = -1 // Ping in milliseconds, -1 means no data or error
 )

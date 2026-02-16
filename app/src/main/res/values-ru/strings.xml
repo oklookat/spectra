@@ -31,7 +31,8 @@
     <string name="name">Название</string>
     <string name="url">URL</string>
     <string name="auto_update">Автообновление</string>
-    <string name="interval_minutes">Интервал (минуты, мин. 15)</string>
+    <string name="auto_update_desc">Проверять обновления по ссылке</string>
+    <string name="interval_minutes">Интервал (минуты)</string>
     <string name="interval_minutes_hourly">Интервал (часы, мин. 1)</string>
     <string name="add">Добавить</string>
     <string name="save">Сохранить</string>
@@ -49,6 +50,16 @@
     <string name="share_group">Поделиться группой (P2P)</string>
     <string name="share_source_url">Поделиться URL</string>
     <string name="url_optional_remote">URL (необязательно, для удаленной группы)</string>
+    <string name="ping">Пинг</string>
+    <string name="sort">Сортировка</string>
+    <string name="sort_as_is">Как есть</string>
+    <string name="sort_by_name_asc">Название (А-Я)</string>
+    <string name="sort_by_name_desc">Название (Я-А)</string>
+    <string name="sort_by_ping_asc">Пинг (0–100)</string>
+    <string name="sort_by_ping_desc">Пинг (100–0)</string>
+    <string name="name_already_exists">Название уже занято</string>
+    <string name="invalid_url">Некорректная ссылка</string>
+    <string name="min_15_min">Мин. 15 мин.</string>
 
     <!-- Settings Screen -->
     <string name="connection">Подключение</string>

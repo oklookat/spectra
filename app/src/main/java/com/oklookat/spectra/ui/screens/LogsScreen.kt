@@ -12,18 +12,17 @@ import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.oklookat.spectra.R
 import com.oklookat.spectra.util.LogManager
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun LogsScreen() {
     val logs = LogManager.logs
@@ -37,46 +36,36 @@ fun LogsScreen() {
         }
     }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .statusBarsPadding()
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            Text(
-                text = stringResource(R.string.nav_logs),
-                style = MaterialTheme.typography.headlineMedium,
-                fontWeight = FontWeight.Bold
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text(stringResource(R.string.nav_logs)) },
+                actions = {
+                    IconButton(onClick = { LogManager.isPaused = !LogManager.isPaused }) {
+                        Icon(
+                            imageVector = if (isPaused) Icons.Default.PlayArrow else Icons.Default.Pause,
+                            contentDescription = stringResource(R.string.toggle_pause)
+                        )
+                    }
+                    IconButton(onClick = {
+                        val allLogs = logs.joinToString("\n")
+                        clipboardManager.setText(AnnotatedString(allLogs))
+                    }) {
+                        Icon(Icons.Default.ContentCopy, contentDescription = stringResource(R.string.copy_logs))
+                    }
+                    IconButton(onClick = { LogManager.clear() }) {
+                        Icon(Icons.Default.Delete, contentDescription = stringResource(R.string.clear_logs))
+                    }
+                }
             )
-            Row {
-                IconButton(onClick = { LogManager.isPaused = !LogManager.isPaused }) {
-                    Icon(
-                        imageVector = if (isPaused) Icons.Default.PlayArrow else Icons.Default.Pause,
-                        contentDescription = stringResource(R.string.toggle_pause)
-                    )
-                }
-                IconButton(onClick = {
-                    val allLogs = logs.joinToString("\n")
-                    clipboardManager.setText(AnnotatedString(allLogs))
-                }) {
-                    Icon(Icons.Default.ContentCopy, contentDescription = stringResource(R.string.copy_logs))
-                }
-                IconButton(onClick = { LogManager.clear() }) {
-                    Icon(Icons.Default.Delete, contentDescription = stringResource(R.string.clear_logs))
-                }
-            }
         }
-
+    ) { padding ->
         LazyColumn(
             state = listState,
-            modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding),
+            contentPadding = PaddingValues(16.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             items(logs) { log ->

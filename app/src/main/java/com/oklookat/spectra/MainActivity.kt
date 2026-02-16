@@ -132,6 +132,7 @@ class MainActivity : ComponentActivity() {
         when (val result = DeepLinkHandler.handle(intent)) {
             is DeepLinkHandler.DeepLinkResult.Profile -> {
                 viewModel.setDeepLinkProfile(result.pending)
+                // Now handled by global state for backward compat or we could use navController
                 viewModel.setScreen(Screen.Profiles)
             }
             is DeepLinkHandler.DeepLinkResult.Group -> {

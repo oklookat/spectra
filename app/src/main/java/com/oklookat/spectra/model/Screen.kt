@@ -10,10 +10,19 @@ import androidx.compose.material.icons.filled.Folder
 import androidx.compose.ui.graphics.vector.ImageVector
 import com.oklookat.spectra.R
 
-enum class Screen(val icon: ImageVector, @StringRes val labelRes: Int, val showInNav: Boolean = true) {
-    Main(Icons.Default.Home, R.string.nav_home),
-    Profiles(Icons.Default.Person, R.string.nav_profiles),
-    Logs(Icons.AutoMirrored.Filled.List, R.string.nav_logs),
-    Settings(Icons.Default.Settings, R.string.nav_settings),
-    Resources(Icons.Default.Folder, R.string.nav_resources, showInNav = false)
+enum class Screen(
+    val route: String,
+    val icon: ImageVector,
+    @StringRes val labelRes: Int,
+    val showInNav: Boolean = true
+) {
+    Main("main", Icons.Default.Home, R.string.nav_home),
+    Profiles("profiles", Icons.Default.Person, R.string.nav_profiles),
+    Logs("logs", Icons.AutoMirrored.Filled.List, R.string.nav_logs),
+    Settings("settings", Icons.Default.Settings, R.string.nav_settings),
+    Resources("resources", Icons.Default.Folder, R.string.nav_resources, showInNav = false);
+
+    companion object {
+        fun fromRoute(route: String?): Screen = entries.find { it.route == route } ?: Main
+    }
 }

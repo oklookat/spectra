@@ -1,7 +1,9 @@
 package com.oklookat.spectra.ui.components
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -23,7 +25,7 @@ fun GroupDialog(
     var name by remember { mutableStateOf(group?.name ?: "") }
     var url by remember { mutableStateOf(group?.url ?: "") }
     var autoUpdate by remember { mutableStateOf(group?.autoUpdateEnabled ?: false) }
-    var interval by remember { mutableStateOf(group?.autoUpdateIntervalMinutes?.toString() ?: "15") }
+    var interval by remember { mutableStateOf(group?.autoUpdateIntervalMinutes?.toString() ?: "60") }
 
     val isNameValid = name.isNotBlank() && (group != null || isNameUnique(name))
     val isUrlValid = url.isBlank() || url.startsWith("http")
@@ -31,10 +33,20 @@ fun GroupDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(if (group == null) stringResource(R.string.add_group) else stringResource(R.string.edit_group)) },
+        title = {
+            Text(
+                if (group == null) stringResource(R.string.add_group)
+                else stringResource(R.string.edit_group)
+            )
+        },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                TextField(
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                OutlinedTextField(
                     value = name,
                     onValueChange = { name = it },
                     label = { Text(stringResource(R.string.name)) },
@@ -42,7 +54,8 @@ fun GroupDialog(
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
                 )
-                TextField(
+
+                OutlinedTextField(
                     value = url,
                     onValueChange = { url = it },
                     label = { Text(stringResource(R.string.url_optional_remote)) },
@@ -50,14 +63,27 @@ fun GroupDialog(
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
                 )
+
                 if (url.isNotBlank()) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(stringResource(R.string.auto_update))
-                        Spacer(modifier = Modifier.weight(1f))
-                        Switch(checked = autoUpdate, onCheckedChange = { autoUpdate = it })
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text(
+                            text = stringResource(R.string.auto_update),
+                            style = MaterialTheme.typography.bodyLarge
+                        )
+                        Switch(
+                            checked = autoUpdate,
+                            onCheckedChange = { autoUpdate = it }
+                        )
                     }
+
                     if (autoUpdate) {
-                        TextField(
+                        OutlinedTextField(
                             value = interval,
                             onValueChange = { if (it.all { char -> char.isDigit() }) interval = it },
                             label = { Text(stringResource(R.string.interval_minutes)) },
@@ -72,14 +98,16 @@ fun GroupDialog(
         },
         confirmButton = {
             Button(
-                onClick = { onConfirm(name, url.ifBlank { null }, autoUpdate, interval.toIntOrNull() ?: 15) },
+                onClick = { onConfirm(name, url.ifBlank { null }, autoUpdate, interval.toIntOrNull() ?: 60) },
                 enabled = isNameValid && isUrlValid && (!autoUpdate || isIntervalValid)
             ) {
                 Text(if (group == null) stringResource(R.string.add) else stringResource(R.string.save))
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) }
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(R.string.cancel))
+            }
         }
     )
 }
@@ -94,18 +122,28 @@ fun RemoteProfileDialog(
     var name by remember { mutableStateOf(profile?.name ?: "") }
     var url by remember { mutableStateOf(profile?.url ?: "") }
     var autoUpdate by remember { mutableStateOf(profile?.autoUpdateEnabled ?: false) }
-    var interval by remember { mutableStateOf(profile?.autoUpdateIntervalMinutes?.toString() ?: "15") }
+    var interval by remember { mutableStateOf(profile?.autoUpdateIntervalMinutes?.toString() ?: "60") }
 
     val isNameValid = name.isNotBlank() && (profile != null || isNameUnique(name))
-    val isUrlValid = url.isNotBlank()
+    val isUrlValid = url.isNotBlank() && url.startsWith("http")
     val isIntervalValid = (interval.toIntOrNull() ?: 0) >= 15
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(if (profile == null) stringResource(R.string.add_remote_profile) else stringResource(R.string.edit_remote_profile)) },
+        title = {
+            Text(
+                if (profile == null) stringResource(R.string.add_remote_profile)
+                else stringResource(R.string.edit_remote_profile)
+            )
+        },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                TextField(
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                OutlinedTextField(
                     value = name,
                     onValueChange = { name = it },
                     label = { Text(stringResource(R.string.name)) },
@@ -113,7 +151,8 @@ fun RemoteProfileDialog(
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
                 )
-                TextField(
+
+                OutlinedTextField(
                     value = url,
                     onValueChange = { url = it },
                     label = { Text(stringResource(R.string.url)) },
@@ -121,13 +160,26 @@ fun RemoteProfileDialog(
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
                 )
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(stringResource(R.string.auto_update))
-                    Spacer(modifier = Modifier.weight(1f))
-                    Switch(checked = autoUpdate, onCheckedChange = { autoUpdate = it })
+
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text(
+                        text = stringResource(R.string.auto_update),
+                        style = MaterialTheme.typography.bodyLarge
+                    )
+                    Switch(
+                        checked = autoUpdate,
+                        onCheckedChange = { autoUpdate = it }
+                    )
                 }
+
                 if (autoUpdate) {
-                    TextField(
+                    OutlinedTextField(
                         value = interval,
                         onValueChange = { if (it.all { char -> char.isDigit() }) interval = it },
                         label = { Text(stringResource(R.string.interval_minutes)) },
@@ -141,14 +193,16 @@ fun RemoteProfileDialog(
         },
         confirmButton = {
             Button(
-                onClick = { onConfirm(name, url, autoUpdate, interval.toIntOrNull() ?: 15) },
+                onClick = { onConfirm(name, url, autoUpdate, interval.toIntOrNull() ?: 60) },
                 enabled = isNameValid && isUrlValid && (!autoUpdate || isIntervalValid)
             ) {
                 Text(if (profile == null) stringResource(R.string.add) else stringResource(R.string.save))
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) }
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(R.string.cancel))
+            }
         }
     )
 }
@@ -173,10 +227,20 @@ fun LocalProfileDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(if (profile == null) stringResource(R.string.add_local_profile) else stringResource(R.string.edit_local_profile)) },
+        title = {
+            Text(
+                if (profile == null) stringResource(R.string.add_local_profile)
+                else stringResource(R.string.edit_local_profile)
+            )
+        },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                TextField(
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                OutlinedTextField(
                     value = name,
                     onValueChange = { name = it },
                     label = { Text(stringResource(R.string.name)) },
@@ -184,12 +248,15 @@ fun LocalProfileDialog(
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
                 )
-                TextField(
+
+                OutlinedTextField(
                     value = content,
                     onValueChange = { content = it },
                     label = { Text(stringResource(R.string.configuration_json)) },
                     isError = !isContentValid && content.isNotEmpty(),
-                    modifier = Modifier.fillMaxWidth().heightIn(min = 100.dp, max = 300.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = 150.dp, max = 300.dp),
                     maxLines = 15
                 )
             }
@@ -203,7 +270,9 @@ fun LocalProfileDialog(
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) }
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(R.string.cancel))
+            }
         }
     )
 }
