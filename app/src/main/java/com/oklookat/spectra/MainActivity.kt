@@ -28,7 +28,9 @@ import com.oklookat.spectra.ui.viewmodel.MainViewModel
 import com.oklookat.spectra.util.DeepLinkHandler
 import com.oklookat.spectra.util.ProfileUpdateWorker
 import com.oklookat.spectra.util.TvUtils
+import dagger.hilt.android.AndroidEntryPoint
 
+@AndroidEntryPoint
 class MainActivity : ComponentActivity() {
 
     private val viewModel: MainViewModel by viewModels()

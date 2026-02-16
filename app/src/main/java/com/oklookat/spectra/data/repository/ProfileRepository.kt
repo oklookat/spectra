@@ -2,14 +2,14 @@ package com.oklookat.spectra.data.repository
 
 import android.content.Context
 import android.util.Base64
-import androidx.core.content.edit
-import com.google.gson.Gson
-import com.google.gson.reflect.TypeToken
+import com.oklookat.spectra.data.ProfileDao
 import com.oklookat.spectra.model.Group
 import com.oklookat.spectra.model.Profile
 import com.oklookat.spectra.model.ShareLinkParser
 import com.oklookat.spectra.model.XrayConfigBuild
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -17,10 +17,15 @@ import java.io.File
 import java.io.FileOutputStream
 import java.nio.charset.Charset
 import java.util.UUID
+import javax.inject.Inject
+import javax.inject.Singleton
 
-class ProfileRepository(context: Context) {
+@Singleton
+class ProfileRepository @Inject constructor(
+    @ApplicationContext private val context: Context,
+    private val dao: ProfileDao
+) {
     private val sharedPreferences = context.getSharedPreferences("profiles_prefs", Context.MODE_PRIVATE)
-    private val gson = Gson()
     private val client = OkHttpClient()
 
     private val profilesDir = File(context.filesDir, "profiles").apply {
@@ -29,26 +34,23 @@ class ProfileRepository(context: Context) {
 
     // --- Groups Logic ---
 
-    fun getGroups(): List<Group> {
-        val json = sharedPreferences.getString("groups_list", null) ?: return listOf(createDefaultGroup())
-        val type = object : TypeToken<List<Group>>() {}.type
-        return try {
-            val groups: List<Group> = gson.fromJson(json, type)
-            if (groups.none { it.id == Group.DEFAULT_GROUP_ID }) {
-                listOf(createDefaultGroup()) + groups
-            } else groups
-        } catch (e: Exception) {
-            listOf(createDefaultGroup())
+    fun getGroupsFlow(): Flow<List<Group>> = dao.getAllGroupsFlow()
+
+    suspend fun getGroups(): List<Group> = withContext(Dispatchers.IO) {
+        val groups = dao.getAllGroups()
+        if (groups.isEmpty()) {
+            val default = createDefaultGroup()
+            dao.insertGroup(default)
+            listOf(default)
+        } else {
+            groups
         }
     }
 
     private fun createDefaultGroup() = Group(id = Group.DEFAULT_GROUP_ID, name = "Default")
 
-    fun saveGroups(groups: List<Group>) {
-        val json = gson.toJson(groups)
-        sharedPreferences.edit {
-            putString("groups_list", json)
-        }
+    suspend fun saveGroup(group: Group) = withContext(Dispatchers.IO) {
+        dao.insertGroup(group)
     }
 
     suspend fun addRemoteGroup(
@@ -57,7 +59,7 @@ class ProfileRepository(context: Context) {
         autoUpdate: Boolean,
         interval: Int
     ): Result<Group> = withContext(Dispatchers.IO) {
-        val groups = getGroups().toMutableList()
+        val groups = dao.getAllGroups()
         if (groups.any { it.name == name }) {
             return@withContext Result.failure(Exception("Group with this name already exists"))
         }
@@ -75,8 +77,7 @@ class ProfileRepository(context: Context) {
 
         try {
             updateGroupProfiles(newGroup)
-            groups.add(newGroup)
-            saveGroups(groups)
+            dao.insertGroup(newGroup)
             Result.success(newGroup)
         } catch (e: Exception) {
             Result.failure(e)
@@ -103,84 +104,57 @@ class ProfileRepository(context: Context) {
 
             if (links.isEmpty()) return@withContext
 
-            val currentProfiles = getProfiles().toMutableList()
-            val toRemove = currentProfiles.filter { it.groupId == group.id }
-            toRemove.forEach { profile ->
+            val currentProfiles = dao.getProfilesByGroup(group.id)
+            currentProfiles.forEach { profile ->
                 profile.fileName?.let { File(profilesDir, it).delete() }
             }
-            currentProfiles.removeAll(toRemove)
+            dao.deleteProfilesByGroup(group.id)
 
-            links.forEachIndexed { index, link ->
-                try {
-                    val shareLink = ShareLinkParser.parse(link)
-                    val profileId = UUID.randomUUID().toString()
-                    val fileName = "$profileId.txt" // Store raw link
-                    File(profilesDir, fileName).writeText(link)
+            val newProfiles = links.mapIndexed { index, link ->
+                val shareLink = ShareLinkParser.parse(link)
+                val profileId = UUID.randomUUID().toString()
+                val fileName = "$profileId.txt"
+                File(profilesDir, fileName).writeText(link)
 
-                    val profile = Profile(
-                        id = profileId,
-                        groupId = group.id,
-                        name = shareLink.getDisplayName(),
-                        url = link,
-                        isRemote = true,
-                        isImported = true,
-                        fileName = fileName,
-                        lastUpdated = System.currentTimeMillis()
-                    )
-                    currentProfiles.add(profile)
-                } catch (_: Exception) {}
+                Profile(
+                    id = profileId,
+                    groupId = group.id,
+                    name = shareLink.getDisplayName(),
+                    url = link,
+                    isRemote = true,
+                    isImported = true,
+                    fileName = fileName,
+                    lastUpdated = System.currentTimeMillis()
+                )
             }
-            saveProfiles(currentProfiles)
+            dao.insertProfiles(newProfiles)
         }
     }
 
-    fun deleteGroup(groupId: String) {
-        if (groupId == Group.DEFAULT_GROUP_ID) return
+    suspend fun deleteGroup(groupId: String) = withContext(Dispatchers.IO) {
+        if (groupId == Group.DEFAULT_GROUP_ID) return@withContext
         
-        val groups = getGroups().toMutableList()
-        groups.removeAll { it.id == groupId }
-        saveGroups(groups)
-
-        val profiles = getProfiles().toMutableList()
-        val toDelete = profiles.filter { it.groupId == groupId }
-        toDelete.forEach { profile ->
+        val profilesToDelete = dao.getProfilesByGroup(groupId)
+        profilesToDelete.forEach { profile ->
             profile.fileName?.let { File(profilesDir, it).delete() }
         }
-        profiles.removeAll(toDelete)
-        saveProfiles(profiles)
+        
+        dao.deleteProfilesByGroup(groupId)
+        dao.deleteGroup(groupId)
     }
 
     // --- Profiles Logic ---
 
-    fun getProfiles(): List<Profile> {
-        val json = sharedPreferences.getString("profiles_list", null) ?: return emptyList()
-        val type = object : TypeToken<List<Profile>>() {}.type
-        return try {
-            val profiles: List<Profile> = gson.fromJson(json, type)
-            // Ensure groupId is not null after loading from GSON
-            profiles.map { 
-                if (it.groupId == null) it.copy(groupId = Group.DEFAULT_GROUP_ID) else it 
-            }
-        } catch (e: Exception) {
-            emptyList()
-        }
-    }
+    fun getProfilesFlow(): Flow<List<Profile>> = dao.getAllProfilesFlow()
 
-    private fun saveProfiles(profiles: List<Profile>) {
-        val json = gson.toJson(profiles)
-        sharedPreferences.edit {
-            putString("profiles_list", json)
-        }
-    }
+    suspend fun getProfiles(): List<Profile> = dao.getAllProfiles()
 
     fun getSelectedProfileId(): String? {
         return sharedPreferences.getString("selected_profile_id", null)
     }
 
     fun setSelectedProfileId(id: String?) {
-        sharedPreferences.edit {
-            putString("selected_profile_id", id)
-        }
+        sharedPreferences.edit().putString("selected_profile_id", id).apply()
     }
 
     suspend fun addRemoteProfile(
@@ -190,7 +164,7 @@ class ProfileRepository(context: Context) {
         interval: Int,
         groupId: String = Group.DEFAULT_GROUP_ID
     ): Result<Profile> = withContext(Dispatchers.IO) {
-        val profiles = getProfiles().toMutableList()
+        val profiles = dao.getAllProfiles()
         if (profiles.any { it.name == name }) {
             return@withContext Result.failure(Exception("Profile with this name already exists"))
         }
@@ -211,21 +185,15 @@ class ProfileRepository(context: Context) {
                 lastUpdated = System.currentTimeMillis(),
                 fileName = fileName
             )
-            profiles.add(newProfile)
-            saveProfiles(profiles)
+            dao.insertProfile(newProfile)
             Result.success(newProfile)
         } catch (e: Exception) {
             Result.failure(e)
         }
     }
 
-    fun updateProfile(updatedProfile: Profile) {
-        val profiles = getProfiles().toMutableList()
-        val index = profiles.indexOfFirst { it.id == updatedProfile.id }
-        if (index != -1) {
-            profiles[index] = updatedProfile
-            saveProfiles(profiles)
-        }
+    suspend fun updateProfile(updatedProfile: Profile) = withContext(Dispatchers.IO) {
+        dao.updateProfile(updatedProfile)
     }
 
     suspend fun downloadProfile(url: String, fileName: String): Boolean = withContext(Dispatchers.IO) {
@@ -249,9 +217,9 @@ class ProfileRepository(context: Context) {
         }
     }
 
-    fun deleteProfiles(ids: Set<String>) {
-        val profiles = getProfiles().toMutableList()
-        val toDelete = profiles.filter { it.id in ids }
+    suspend fun deleteProfiles(ids: Set<String>) = withContext(Dispatchers.IO) {
+        val allProfiles = dao.getAllProfiles()
+        val toDelete = allProfiles.filter { it.id in ids }
         
         toDelete.forEach { profile ->
             profile.fileName?.let {
@@ -259,8 +227,7 @@ class ProfileRepository(context: Context) {
             }
         }
         
-        profiles.removeAll(toDelete)
-        saveProfiles(profiles)
+        dao.deleteProfiles(ids)
         
         val selectedId = getSelectedProfileId()
         if (selectedId in ids) {
@@ -295,8 +262,7 @@ class ProfileRepository(context: Context) {
         return content
     }
 
-    fun saveLocalProfile(name: String, content: String, groupId: String = Group.DEFAULT_GROUP_ID): Profile {
-        val profiles = getProfiles().toMutableList()
+    suspend fun saveLocalProfile(name: String, content: String, groupId: String = Group.DEFAULT_GROUP_ID): Profile = withContext(Dispatchers.IO) {
         val profileId = UUID.randomUUID().toString()
         val fileName = "$profileId.json"
         
@@ -310,9 +276,8 @@ class ProfileRepository(context: Context) {
             isRemote = false,
             fileName = fileName
         )
-        profiles.add(newProfile)
-        saveProfiles(profiles)
-        return newProfile
+        dao.insertProfile(newProfile)
+        newProfile
     }
 
     fun updateLocalProfileContent(profile: Profile, content: String): Boolean {

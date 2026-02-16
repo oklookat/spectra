@@ -1,39 +1,49 @@
 package com.oklookat.spectra.util
 
 import android.content.Context
+import androidx.hilt.work.HiltWorker
 import androidx.work.*
 import com.oklookat.spectra.data.repository.ProfileRepository
 import com.oklookat.spectra.service.XrayVpnService
+import dagger.assisted.Assisted
+import dagger.assisted.AssistedInject
 import java.util.concurrent.TimeUnit
 
-class ProfileUpdateWorker(
-    context: Context,
-    workerParams: WorkerParameters
+@HiltWorker
+class ProfileUpdateWorker @AssistedInject constructor(
+    @Assisted context: Context,
+    @Assisted workerParams: WorkerParameters,
+    private val profileRepository: ProfileRepository
 ) : CoroutineWorker(context, workerParams) {
 
     override suspend fun doWork(): Result {
-        val profileRepository = ProfileRepository(applicationContext)
         val currentTime = System.currentTimeMillis()
         
         // 1. Update remote groups
-        val groups = profileRepository.getGroups().filter { 
-            it.isRemote && it.autoUpdateEnabled && 
-            (currentTime - it.lastUpdated >= it.autoUpdateIntervalMinutes * 60 * 1000L)
+        val groups = try {
+            profileRepository.getGroups().filter { 
+                it.isRemote && it.autoUpdateEnabled && 
+                (currentTime - it.lastUpdated >= it.autoUpdateIntervalMinutes * 60 * 1000L)
+            }
+        } catch (e: Exception) {
+            return Result.retry()
         }
         
         for (group in groups) {
             try {
                 profileRepository.updateGroupProfiles(group)
-                profileRepository.saveGroups(profileRepository.getGroups().map { 
-                    if (it.id == group.id) it.copy(lastUpdated = System.currentTimeMillis()) else it 
-                })
+                profileRepository.saveGroup(group.copy(lastUpdated = System.currentTimeMillis()))
             } catch (_: Exception) { }
         }
 
         // 2. Update individual remote profiles
-        val profiles = profileRepository.getProfiles().filter { 
-            it.isRemote && !it.isImported && it.autoUpdateEnabled && 
-            (currentTime - it.lastUpdated >= it.autoUpdateIntervalMinutes * 60 * 1000L)
+        val profiles = try {
+            profileRepository.getProfiles().filter { 
+                it.isRemote && !it.isImported && it.autoUpdateEnabled && 
+                (currentTime - it.lastUpdated >= it.autoUpdateIntervalMinutes * 60 * 1000L)
+            }
+        } catch (e: Exception) {
+            return Result.retry()
         }
         
         var hasError = false
@@ -45,10 +55,6 @@ class ProfileUpdateWorker(
                 val contentChanged = profileRepository.downloadProfile(url, fileName)
                 val updatedProfile = profile.copy(lastUpdated = System.currentTimeMillis())
                 profileRepository.updateProfile(updatedProfile)
-                
-                if (contentChanged && XrayVpnService.isServiceRunning && XrayVpnService.runningProfileId == profile.id) {
-                    // Logic to restart VPN if needed
-                }
             } catch (_: Exception) {
                 hasError = true
             }
@@ -61,31 +67,17 @@ class ProfileUpdateWorker(
         private const val WORK_NAME = "profile_update_work"
 
         fun setupPeriodicWork(context: Context) {
-            val profileRepository = ProfileRepository(context)
-            val autoUpdateProfiles = profileRepository.getProfiles().filter { it.isRemote && !it.isImported && it.autoUpdateEnabled }
-            val autoUpdateGroups = profileRepository.getGroups().filter { it.isRemote && it.autoUpdateEnabled }
-
-            if (autoUpdateProfiles.isEmpty() && autoUpdateGroups.isEmpty()) {
-                WorkManager.getInstance(context).cancelUniqueWork(WORK_NAME)
-                return
-            }
-
-            val minProfileInterval = autoUpdateProfiles.minOfOrNull { it.autoUpdateIntervalMinutes } ?: Int.MAX_VALUE
-            val minGroupInterval = autoUpdateGroups.minOfOrNull { it.autoUpdateIntervalMinutes } ?: Int.MAX_VALUE
-            
-            val minInterval = minOf(minProfileInterval, minGroupInterval).coerceAtLeast(15)
-
             val constraints = Constraints.Builder()
                 .setRequiredNetworkType(NetworkType.CONNECTED)
                 .build()
 
-            val workRequest = PeriodicWorkRequestBuilder<ProfileUpdateWorker>(minInterval.toLong(), TimeUnit.MINUTES)
+            val workRequest = PeriodicWorkRequestBuilder<ProfileUpdateWorker>(1, TimeUnit.HOURS)
                 .setConstraints(constraints)
                 .build()
 
             WorkManager.getInstance(context).enqueueUniquePeriodicWork(
                 WORK_NAME,
-                ExistingPeriodicWorkPolicy.UPDATE,
+                ExistingPeriodicWorkPolicy.KEEP,
                 workRequest
             )
         }

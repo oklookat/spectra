@@ -1,54 +1,56 @@
 package com.oklookat.spectra.data.repository
 
 import android.content.Context
-import androidx.core.content.edit
-import com.google.gson.Gson
-import com.google.gson.reflect.TypeToken
+import com.oklookat.spectra.data.ResourceDao
 import com.oklookat.spectra.model.Resource
 import com.oklookat.spectra.util.LogManager
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ensureActive
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.io.File
 import java.io.FileOutputStream
+import javax.inject.Inject
+import javax.inject.Singleton
 import kotlin.coroutines.coroutineContext
 
-class ResourceRepository(private val context: Context) {
-    private val sharedPreferences = context.getSharedPreferences("resources_prefs", Context.MODE_PRIVATE)
-    private val gson = Gson()
+@Singleton
+class ResourceRepository @Inject constructor(
+    @ApplicationContext private val context: Context,
+    private val dao: ResourceDao
+) {
     private val client = OkHttpClient()
-    private val mutex = Mutex()
 
     private val resourcesDir = context.filesDir
 
     private val reservedNames = setOf("_geoip.dat", "_geosite.dat")
     private val defaultGeoFiles = setOf("geoip.dat", "geosite.dat")
 
-    fun getResources(): List<Resource> {
-        val json = sharedPreferences.getString("resources_list", null) ?: return getDefaultResources()
-        val type = object : TypeToken<List<Resource>>() {}.type
-        val stored: List<Resource> = try {
-            gson.fromJson(json, type)
-        } catch (e: Exception) {
-            emptyList()
+    fun getResourcesFlow(): Flow<List<Resource>> {
+        return dao.getAllResourcesFlow().map { stored ->
+            val current = stored.toMutableList()
+            defaultGeoFiles.forEach { name ->
+                if (current.none { it.name == name }) {
+                    current.add(Resource(name = name, isDefault = true, size = getFileSize(name)))
+                }
+            }
+            current.map { it.copy(size = getFileSize(it.name)) }
         }
+    }
 
+    suspend fun getResources(): List<Resource> = withContext(Dispatchers.IO) {
+        val stored = dao.getAllResources()
         val current = stored.toMutableList()
         defaultGeoFiles.forEach { name ->
             if (current.none { it.name == name }) {
                 current.add(Resource(name = name, isDefault = true, size = getFileSize(name)))
             }
         }
-
-        return current.map { it.copy(size = getFileSize(it.name)) }
-    }
-
-    private fun getDefaultResources(): List<Resource> {
-        return defaultGeoFiles.map { Resource(name = it, isDefault = true, size = getFileSize(it)) }
+        current.map { it.copy(size = getFileSize(it.name)) }
     }
 
     private fun getFileSize(name: String): Long {
@@ -62,20 +64,10 @@ class ResourceRepository(private val context: Context) {
         }
     }
 
-    private fun saveResourcesInternal(resources: List<Resource>) {
-        val json = gson.toJson(resources.filter { !it.isDefault || it.url != null })
-        sharedPreferences.edit {
-            putString("resources_list", json)
-        }
+    suspend fun saveResources(resources: List<Resource>) = withContext(Dispatchers.IO) {
+        dao.insertResources(resources)
     }
 
-    suspend fun saveResources(resources: List<Resource>) = mutex.withLock {
-        saveResourcesInternal(resources)
-    }
-
-    /**
-     * @return Result with true if file was downloaded, false if not modified (304)
-     */
     suspend fun addOrUpdateResource(
         name: String,
         url: String?,
@@ -100,7 +92,7 @@ class ResourceRepository(private val context: Context) {
             var wasDownloaded = true
             var newEtag: String? = null
             if (url != null) {
-                val existing = getResources().find { it.name == name }
+                val existing = dao.getAllResources().find { it.name == name }
                 val etagToUse = if (existing?.url == url) existing.etag else null
                 
                 newEtag = downloadResource(url, name, etagToUse, onProgress)
@@ -109,27 +101,18 @@ class ResourceRepository(private val context: Context) {
                 File(resourcesDir, name).writeBytes(fileBytes)
             }
 
-            mutex.withLock {
-                val resources = getResources().toMutableList()
-                val existingIndex = resources.indexOfFirst { it.name == name }
-                val newResource = Resource(
-                    name = name,
-                    url = url,
-                    autoUpdateEnabled = autoUpdate,
-                    autoUpdateIntervalHours = interval.coerceAtLeast(1),
-                    lastUpdated = System.currentTimeMillis(),
-                    isDefault = name in defaultGeoFiles,
-                    etag = newEtag ?: (resources.getOrNull(existingIndex)?.etag)
-                )
+            val existing = dao.getAllResources().find { it.name == name }
+            val newResource = Resource(
+                name = name,
+                url = url,
+                autoUpdateEnabled = autoUpdate,
+                autoUpdateIntervalHours = interval.coerceAtLeast(1),
+                lastUpdated = System.currentTimeMillis(),
+                isDefault = name in defaultGeoFiles,
+                etag = newEtag ?: existing?.etag
+            )
 
-                if (existingIndex != -1) {
-                    resources[existingIndex] = newResource
-                } else {
-                    resources.add(newResource)
-                }
-
-                saveResourcesInternal(resources)
-            }
+            dao.insertResource(newResource)
             Result.success(wasDownloaded)
         } catch (e: Exception) {
             if (url != null) {
@@ -195,7 +178,7 @@ class ResourceRepository(private val context: Context) {
         }
     }
 
-    suspend fun deleteResource(name: String) = mutex.withLock {
+    suspend fun deleteResource(name: String) = withContext(Dispatchers.IO) {
         val file = File(resourcesDir, name)
         if (file.exists()) file.delete()
 
@@ -206,9 +189,7 @@ class ResourceRepository(private val context: Context) {
             }
         }
 
-        val resources = getResources().toMutableList()
-        resources.removeAll { it.name == name }
-        saveResourcesInternal(resources)
+        dao.deleteResource(name)
     }
 
     suspend fun reloadAll(onProgress: (Float) -> Unit = {}): Result<Unit> = withContext(Dispatchers.IO) {
@@ -220,17 +201,11 @@ class ResourceRepository(private val context: Context) {
         resourcesToReload.forEach { res ->
             try {
                 val newEtag = downloadResource(res.url!!, res.name, res.etag, onProgress)
-                mutex.withLock {
-                    val updatedResources = getResources().toMutableList()
-                    val index = updatedResources.indexOfFirst { it.name == res.name }
-                    if (index != -1) {
-                        updatedResources[index] = updatedResources[index].copy(
-                            etag = newEtag,
-                            lastUpdated = System.currentTimeMillis()
-                        )
-                        saveResourcesInternal(updatedResources)
-                    }
-                }
+                val updatedRes = res.copy(
+                    etag = newEtag,
+                    lastUpdated = System.currentTimeMillis()
+                )
+                dao.insertResource(updatedRes)
             } catch (e: Exception) {
                 hasError = true
                 LogManager.addLog("[Resource] Reload error for ${res.name}: ${e.message}")
