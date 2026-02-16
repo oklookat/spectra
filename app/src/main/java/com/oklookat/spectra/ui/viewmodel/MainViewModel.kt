@@ -70,7 +70,6 @@ class MainViewModel @Inject constructor(
                 uiState = uiState.copy(
                     selectedProfileId = settings.selectedProfileId,
                     settings = SettingsState(
-                        useDebugConfig = settings.useDebugConfig,
                         isIpv6Enabled = settings.isIpv6Enabled,
                         vpnAddress = settings.vpnAddress,
                         vpnDns = settings.vpnDns,

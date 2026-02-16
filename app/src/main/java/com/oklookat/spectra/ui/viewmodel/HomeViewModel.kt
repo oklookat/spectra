@@ -43,8 +43,7 @@ class HomeViewModel @Inject constructor(
         ) { profiles, settings ->
             uiState = uiState.copy(
                 profiles = profiles,
-                selectedProfileId = settings.selectedProfileId,
-                useDebugConfig = settings.useDebugConfig
+                selectedProfileId = settings.selectedProfileId
             )
         }.launchIn(viewModelScope)
     }

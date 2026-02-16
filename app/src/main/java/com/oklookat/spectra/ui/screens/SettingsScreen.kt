@@ -23,7 +23,6 @@ fun SettingsScreen(
     isVpnEnabled: Boolean,
     isDeepLinkVerified: Boolean,
     isTv: Boolean,
-    onToggleDebug: (Boolean) -> Unit,
     onToggleIpv6: (Boolean) -> Unit,
     onUpdateTunnel: (String, String, String, String, Int) -> Unit,
     onOpenDeepLinkSettings: () -> Unit,
@@ -146,23 +145,6 @@ fun SettingsScreen(
                     Button(onClick = onCheckUpdates) {
                         Text(stringResource(R.string.refresh))
                     }
-                }
-            )
-        }
-
-        if (BuildConfig.DEBUG) {
-            HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp))
-            SettingsSectionTitle(stringResource(R.string.debug_mode))
-            ListItem(
-                headlineContent = { Text(stringResource(R.string.debug_mode)) },
-                supportingContent = { Text(stringResource(R.string.use_test_config)) },
-                leadingContent = { Icon(Icons.Default.BugReport, contentDescription = null) },
-                trailingContent = {
-                    Switch(
-                        checked = uiState.useDebugConfig,
-                        onCheckedChange = onToggleDebug,
-                        enabled = !isVpnEnabled
-                    )
                 }
             )
         }

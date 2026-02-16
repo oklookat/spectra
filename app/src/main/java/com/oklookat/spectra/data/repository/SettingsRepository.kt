@@ -4,7 +4,6 @@ import android.content.Context
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.*
 import androidx.datastore.preferences.preferencesDataStore
-import com.oklookat.spectra.BuildConfig
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
@@ -18,7 +17,6 @@ class SettingsRepository @Inject constructor(
     @ApplicationContext private val context: Context
 ) {
     private object PreferencesKeys {
-        val USE_DEBUG_CONFIG = booleanPreferencesKey("use_debug_config")
         val ENABLE_IPV6 = booleanPreferencesKey("enable_ipv6")
         val VPN_ADDRESS = stringPreferencesKey("vpn_address")
         val VPN_DNS = stringPreferencesKey("vpn_dns")
@@ -30,7 +28,6 @@ class SettingsRepository @Inject constructor(
 
     val settingsFlow: Flow<SettingsData> = context.dataStore.data.map { preferences ->
         SettingsData(
-            useDebugConfig = if (BuildConfig.DEBUG) preferences[PreferencesKeys.USE_DEBUG_CONFIG] ?: true else false,
             isIpv6Enabled = preferences[PreferencesKeys.ENABLE_IPV6] ?: false,
             vpnAddress = preferences[PreferencesKeys.VPN_ADDRESS] ?: "10.0.0.1",
             vpnDns = preferences[PreferencesKeys.VPN_DNS] ?: "10.0.0.2",
@@ -39,10 +36,6 @@ class SettingsRepository @Inject constructor(
             vpnMtu = preferences[PreferencesKeys.VPN_MTU] ?: 9000,
             selectedProfileId = preferences[PreferencesKeys.SELECTED_PROFILE_ID]
         )
-    }
-
-    suspend fun setUseDebugConfig(enabled: Boolean) {
-        context.dataStore.edit { it[PreferencesKeys.USE_DEBUG_CONFIG] = enabled }
     }
 
     suspend fun setIpv6Enabled(enabled: Boolean) {
@@ -68,7 +61,6 @@ class SettingsRepository @Inject constructor(
 }
 
 data class SettingsData(
-    val useDebugConfig: Boolean,
     val isIpv6Enabled: Boolean,
     val vpnAddress: String,
     val vpnDns: String,

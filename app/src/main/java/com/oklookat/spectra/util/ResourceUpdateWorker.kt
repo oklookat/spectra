@@ -18,7 +18,7 @@ class ResourceUpdateWorker @AssistedInject constructor(
     override suspend fun doWork(): Result {
         val resources = try {
             resourceRepository.getResources().filter { it.url != null && it.autoUpdateEnabled }
-        } catch (e: Exception) {
+        } catch (_: Exception) {
             return Result.retry()
         }
         
@@ -39,7 +39,7 @@ class ResourceUpdateWorker @AssistedInject constructor(
                             lastUpdated = System.currentTimeMillis()
                         )
                     }
-                } catch (e: Exception) {
+                } catch (_: Exception) {
                     hasError = true
                 }
             }

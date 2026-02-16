@@ -1,8 +1,12 @@
 package com.oklookat.spectra.ui.components
 
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.MoreVert
@@ -10,6 +14,8 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.scale
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
@@ -31,24 +37,37 @@ fun ProfileItem(
     onDeleteClick: () -> Unit
 ) {
     var showItemMenu by remember { mutableStateOf(false) }
+    var isFocused by remember { mutableStateOf(false) }
+    
+    val scale by animateFloatAsState(if (isFocused && isTv) 1.03f else 1.0f, label = "scale")
+    
+    val containerColor by animateColorAsState(
+        targetValue = when {
+            isFocused && isTv -> MaterialTheme.colorScheme.primaryContainer
+            isSelectedForDeletion -> MaterialTheme.colorScheme.errorContainer
+            isActive -> MaterialTheme.colorScheme.secondaryContainer
+            else -> MaterialTheme.colorScheme.surfaceVariant
+        },
+        label = "color"
+    )
 
     Card(
         modifier = Modifier
             .fillMaxWidth()
+            .scale(scale)
+            .onFocusChanged { isFocused = it.isFocused }
             .combinedClickable(
                 onClick = onClick,
                 onLongClick = onLongClick
             ),
-        colors = CardDefaults.cardColors(
-            containerColor = when {
-                isSelectedForDeletion -> MaterialTheme.colorScheme.primaryContainer
-                isActive -> MaterialTheme.colorScheme.secondaryContainer
-                else -> MaterialTheme.colorScheme.surfaceVariant
-            }
-        ),
-        border = if (isActive) CardDefaults.outlinedCardBorder().copy(
-            brush = androidx.compose.ui.graphics.SolidColor(MaterialTheme.colorScheme.primary)
-        ) else null
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(containerColor = containerColor),
+        border = if (isFocused && isTv) {
+            BorderStroke(2.dp, MaterialTheme.colorScheme.primary)
+        } else if (isActive) {
+            BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.5f))
+        } else null,
+        elevation = CardDefaults.cardElevation(defaultElevation = if (isFocused) 8.dp else 2.dp)
     ) {
         Row(
             modifier = Modifier.padding(16.dp),
@@ -57,24 +76,25 @@ fun ProfileItem(
             Icon(
                 imageVector = if (profile.isRemote) Icons.Default.Cloud else Icons.Default.Description, 
                 contentDescription = null,
-                tint = if (isActive) MaterialTheme.colorScheme.primary else LocalContentColor.current
+                tint = if (isActive || isFocused) MaterialTheme.colorScheme.primary else LocalContentColor.current
             )
             Spacer(modifier = Modifier.width(16.dp))
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = profile.name, 
                     style = MaterialTheme.typography.titleMedium,
-                    color = if (isActive) MaterialTheme.colorScheme.primary else Color.Unspecified
+                    color = if (isActive || isFocused) MaterialTheme.colorScheme.primary else Color.Unspecified
                 )
                 if (profile.isRemote && !profile.url.isNullOrEmpty()) {
                     Text(
                         text = profile.url,
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        color = if (isFocused) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
                         maxLines = 1
                     )
                 }
             }
+            
             if (isActive) {
                 Icon(
                     Icons.Default.CheckCircle, 
@@ -86,7 +106,11 @@ fun ProfileItem(
             
             Box {
                 IconButton(onClick = { showItemMenu = true }) {
-                    Icon(Icons.Outlined.MoreVert, contentDescription = "More")
+                    Icon(
+                        imageVector = Icons.Outlined.MoreVert, 
+                        contentDescription = "More",
+                        tint = if (isFocused) MaterialTheme.colorScheme.primary else LocalContentColor.current
+                    )
                 }
                 DropdownMenu(
                     expanded = showItemMenu,

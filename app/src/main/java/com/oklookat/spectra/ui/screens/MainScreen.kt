@@ -3,6 +3,9 @@ package com.oklookat.spectra.ui.screens
 import android.content.res.Configuration
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.*
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -13,6 +16,8 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
@@ -31,8 +36,7 @@ import libv2ray.Libv2ray
 @Composable
 fun MainScreen(
     uiState: HomeUiState,
-    onToggleVpn: (Boolean) -> Unit,
-    onSelectProfile: (String?) -> Unit
+    onToggleVpn: (Boolean) -> Unit
 ) {
     val context = LocalContext.current
     val isTv = TvUtils.isTv(context)
@@ -42,8 +46,7 @@ fun MainScreen(
     } else {
         MobileMainScreen(
             uiState = uiState,
-            onToggleVpn = onToggleVpn,
-            onSelectProfile = onSelectProfile
+            onToggleVpn = onToggleVpn
         )
     }
 }
@@ -52,8 +55,7 @@ fun MainScreen(
 @Composable
 private fun MobileMainScreen(
     uiState: HomeUiState,
-    onToggleVpn: (Boolean) -> Unit,
-    onSelectProfile: (String?) -> Unit
+    onToggleVpn: (Boolean) -> Unit
 ) {
     val haptic = LocalHapticFeedback.current
     val configuration = LocalConfiguration.current
@@ -142,7 +144,7 @@ private fun TvMainScreen(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .padding(32.dp),
+            .padding(24.dp),
         contentAlignment = Alignment.Center
     ) {
         Text(
@@ -154,10 +156,10 @@ private fun TvMainScreen(
                 .padding(top = 24.dp)
         )
 
-        VpnToggleButton(
+        TvVpnToggleButton(
             isVpnEnabled = isVpnEnabled,
             onToggleVpn = onToggleVpn,
-            modifier = Modifier.size(260.dp)
+            modifier = Modifier.size(280.dp)
         )
         
         Box(
@@ -166,6 +168,71 @@ private fun TvMainScreen(
                 .padding(bottom = 8.dp)
         ) {
             AppVersionInfo()
+        }
+    }
+}
+
+@Composable
+private fun TvVpnToggleButton(
+    isVpnEnabled: Boolean,
+    onToggleVpn: (Boolean) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    var isFocused by remember { mutableStateOf(false) }
+    
+    val scale by animateFloatAsState(
+        targetValue = if (isFocused) 1.1f else 1.0f,
+        animationSpec = spring(stiffness = Spring.StiffnessLow),
+        label = "scale"
+    )
+
+    val buttonColor by animateColorAsState(
+        if (isVpnEnabled) MaterialTheme.colorScheme.primaryContainer
+        else MaterialTheme.colorScheme.surfaceVariant,
+        label = "buttonColor"
+    )
+
+    val iconColor by animateColorAsState(
+        if (isVpnEnabled) MaterialTheme.colorScheme.primary
+        else MaterialTheme.colorScheme.onSurfaceVariant,
+        label = "iconColor"
+    )
+
+    Box(
+        modifier = modifier
+            .graphicsLayer {
+                scaleX = scale
+                scaleY = scale
+            }
+            .onFocusChanged { isFocused = it.isFocused }
+            .focusable()
+            .clickable { onToggleVpn(!isVpnEnabled) },
+        contentAlignment = Alignment.Center
+    ) {
+        // Focus ring/glow
+        if (isFocused) {
+            Surface(
+                modifier = Modifier.fillMaxSize(),
+                shape = CircleShape,
+                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f),
+                border = BorderStroke(4.dp, MaterialTheme.colorScheme.primary)
+            ) {}
+        }
+
+        Surface(
+            modifier = Modifier.fillMaxSize(0.85f),
+            shape = CircleShape,
+            color = buttonColor,
+            tonalElevation = if (isFocused) 8.dp else 2.dp
+        ) {
+            Box(contentAlignment = Alignment.Center) {
+                Icon(
+                    imageVector = Icons.Default.PowerSettingsNew,
+                    contentDescription = if (isVpnEnabled) stringResource(R.string.disable_vpn) else stringResource(R.string.enable_vpn),
+                    modifier = Modifier.fillMaxSize(0.5f),
+                    tint = iconColor
+                )
+            }
         }
     }
 }
@@ -188,23 +255,24 @@ private fun VpnToggleButton(
         label = "iconColor"
     )
 
-    BoxWithConstraints(modifier = modifier) {
-        val maxButtonSize = minOf(this.maxWidth, this.maxHeight)
-        val iconSize = maxButtonSize * 0.4f
-
-        FilledIconButton(
-            onClick = { onToggleVpn(!isVpnEnabled) },
-            modifier = Modifier.size(maxButtonSize),
-            shape = CircleShape,
-            colors = IconButtonDefaults.filledIconButtonColors(
-                containerColor = buttonColor,
-                contentColor = iconColor
-            )
+    Surface(
+        onClick = { onToggleVpn(!isVpnEnabled) },
+        modifier = modifier,
+        shape = CircleShape,
+        color = buttonColor
+    ) {
+        Box(
+            modifier = Modifier.fillMaxSize(),
+            contentAlignment = Alignment.Center
         ) {
             Icon(
                 imageVector = Icons.Default.PowerSettingsNew,
-                contentDescription = if (isVpnEnabled) stringResource(R.string.disable_vpn) else stringResource(R.string.enable_vpn),
-                modifier = Modifier.size(iconSize)
+                contentDescription = if (isVpnEnabled)
+                    stringResource(R.string.disable_vpn)
+                else
+                    stringResource(R.string.enable_vpn),
+                modifier = Modifier.fillMaxSize(0.4f),
+                tint = iconColor
             )
         }
     }
@@ -219,7 +287,7 @@ private fun AppVersionInfo() {
 
     val xrayFullVersion = try {
         Libv2ray.checkVersionX()
-    } catch (e: Exception) {
+    } catch (_: Exception) {
         ""
     }
 

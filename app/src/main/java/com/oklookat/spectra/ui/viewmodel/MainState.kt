@@ -12,7 +12,6 @@ import com.oklookat.spectra.model.Screen
 import com.oklookat.spectra.service.XrayVpnService
 
 data class SettingsState(
-    val useDebugConfig: Boolean = false,
     val isIpv6Enabled: Boolean = false,
     val vpnAddress: String = "",
     val vpnDns: String = "",

@@ -141,8 +141,7 @@ private fun AppNavigation(
                 val homeViewModel: HomeViewModel = hiltViewModel()
                 MainScreen(
                     uiState = homeViewModel.uiState,
-                    onToggleVpn = onToggleVpn,
-                    onSelectProfile = { homeViewModel.selectProfile(it) }
+                    onToggleVpn = onToggleVpn
                 )
             }
             Screen.Profiles -> {
@@ -159,7 +158,6 @@ private fun AppNavigation(
                     isVpnEnabled = homeViewModel.uiState.isVpnEnabled,
                     isDeepLinkVerified = profilesViewModel.uiState.isDeepLinkVerified,
                     isTv = isTv,
-                    onToggleDebug = { settingsViewModel.toggleDebugConfig(it) },
                     onToggleIpv6 = { settingsViewModel.toggleIpv6(it) },
                     onUpdateTunnel = { addr, dns, addr6, dns6, mtu ->
                         settingsViewModel.updateTunnelSettings(addr, dns, addr6, dns6, mtu)

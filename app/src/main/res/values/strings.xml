@@ -58,8 +58,6 @@
     <string name="tunnel_ipv4">Tunnel (IPv4)</string>
     <string name="tunnel_ipv6">Tunnel (IPv6)</string>
     <string name="advanced">Advanced</string>
-    <string name="debug_mode">Debug Mode</string>
-    <string name="use_test_config">Use test configuration from assets</string>
     <string name="address">Address</string>
     <string name="dns_server">DNS Server</string>
     <string name="mtu">MTU</string>
@@ -117,7 +115,6 @@
     <string name="invalid_link">Invalid link</string>
     <string name="profile_added">Profile \'%1$s\' added</string>
     <string name="failed_to_add_profile">Failed to add profile: %1$s</string>
-    <string name="select_profile_or_debug">Please select a profile or enable Debug Mode</string>
     <string name="group_added">Group \'%1$s\' added</string>
     <string name="failed_to_add_group">Failed to add group: %1$s</string>
     

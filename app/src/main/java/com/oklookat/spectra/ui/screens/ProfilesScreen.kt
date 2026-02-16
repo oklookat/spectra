@@ -60,31 +60,6 @@ fun ProfilesScreen(
     var profileToSend by remember { mutableStateOf<Profile?>(null) }
     var groupToSend by remember { mutableStateOf<Group?>(null) }
 
-    // Logic from SpectraApp moved here for better encapsulation
-    LaunchedEffect(uiState.deepLinkProfile) {
-        uiState.deepLinkProfile?.let { dp ->
-            val existing = uiState.profiles.find { it.name == dp.name }
-            if (existing != null) {
-                viewModel.setPendingProfileToReplace(dp)
-            } else {
-                viewModel.saveRemoteProfile(null, dp.name, dp.url, dp.autoUpdate, dp.interval) { }
-                viewModel.setDeepLinkProfile(null)
-            }
-        }
-    }
-
-    LaunchedEffect(uiState.deepLinkGroup) {
-        uiState.deepLinkGroup?.let { dg ->
-            val existing = uiState.groups.find { it.name == dg.name }
-            if (existing != null) {
-                viewModel.setPendingGroupToReplace(dg)
-            } else {
-                viewModel.saveGroup(null, dg.name, dg.url, dg.autoUpdate, dg.interval) { }
-                viewModel.setDeepLinkGroup(null)
-            }
-        }
-    }
-
     val filePicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
         uri?.let {
             try {
@@ -133,11 +108,14 @@ fun ProfilesScreen(
                     showGroupDialog = true
                 },
                 onRefreshGroup = { viewModel.refreshGroup(selectedGroup!!) },
-                onDeleteGroup = { viewModel.deleteGroup(selectedGroup!!.id) }
+                onDeleteGroup = { viewModel.deleteGroup(selectedGroup!!.id) },
+                // TV Actions
+                onAddProfileClick = { showMenu = true },
+                onRefreshAll = { viewModel.refreshRemoteProfiles() }
             )
         },
         floatingActionButton = {
-            if (!isSelectionMode && (selectedGroup == null || !selectedGroup.isRemote)) {
+            if (!isTv && !isSelectionMode && (selectedGroup == null || !selectedGroup.isRemote)) {
                 ProfilesFab(
                     onShowMenu = { showMenu = true },
                     showMenu = showMenu,
@@ -226,7 +204,29 @@ fun ProfilesScreen(
         }
     }
 
-    // Dialogs
+    // Reuse ProfilesFab logic for TV menu (shows when showMenu is true)
+    if (isTv && showMenu) {
+        TvAddProfileMenu(
+            onDismiss = { showMenu = false },
+            onP2PReceive = { 
+                showMenu = false
+                mainViewModel.startP2PServer() 
+            },
+            onAddRemote = {
+                showMenu = false
+                editingProfile = null
+                showRemoteDialog = true
+            },
+            onAddManual = {
+                showMenu = false
+                editingProfile = null
+                importedContent = ""
+                showLocalDialog = true
+            }
+        )
+    }
+
+    // Dialogs...
     if (showGroupDialog) {
         GroupDialog(
             group = editingGroup,
@@ -262,26 +262,6 @@ fun ProfilesScreen(
             isReplace = mainUiState.showP2PReplaceDialog,
             onAccept = { mainViewModel.acceptP2PPayload() },
             onReject = { mainViewModel.rejectP2PPayload() }
-        )
-    }
-
-    if (showScanner && !isTv) {
-        P2PScannerDialog(
-            onDismiss = { 
-                showScanner = false
-                profileToSend = null
-                groupToSend = null
-            },
-            onQrScanned = { url, token ->
-                showScanner = false
-                profileToSend?.let { 
-                    // ProfilesViewModel could have a sendProfile method or we use main
-                    // For now, let's assume we need profile content
-                    val content = if (!it.isRemote) viewModel.getProfileContent(it) else null
-                    // This is a bit tricky since send logic is in MainViewModel
-                    // Let's keep P2P send in MainViewModel for now but it needs profile content
-                }
-            }
         )
     }
 
@@ -350,7 +330,10 @@ private fun ProfilesTopBar(
     onShareGroup: () -> Unit,
     onEditGroup: () -> Unit,
     onRefreshGroup: () -> Unit,
-    onDeleteGroup: () -> Unit
+    onDeleteGroup: () -> Unit,
+    // TV Actions
+    onAddProfileClick: () -> Unit = {},
+    onRefreshAll: () -> Unit = {}
 ) {
     val context = LocalContext.current
     
@@ -373,6 +356,15 @@ private fun ProfilesTopBar(
             TopAppBar(
                 title = { Text(stringResource(R.string.profiles)) },
                 actions = {
+                    if (isTv) {
+                        IconButton(onClick = onRefreshAll) {
+                            Icon(Icons.Default.Refresh, contentDescription = stringResource(R.string.refresh_all_remote))
+                        }
+                        IconButton(onClick = onAddProfileClick) {
+                            Icon(Icons.Default.Add, contentDescription = stringResource(R.string.add_profile))
+                        }
+                    }
+                    
                     if (selectedGroup != null) {
                         Box {
                             IconButton(onClick = onGroupMenuClick) {
@@ -479,6 +471,52 @@ private fun ProfilesTopBar(
             }
         }
     }
+}
+
+@Composable
+private fun TvAddProfileMenu(
+    onDismiss: () -> Unit,
+    onP2PReceive: () -> Unit,
+    onAddRemote: () -> Unit,
+    onAddManual: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.add_profile)) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Button(
+                    onClick = onP2PReceive,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Icon(Icons.Default.QrCode, contentDescription = null)
+                    Spacer(Modifier.width(8.dp))
+                    Text(stringResource(R.string.p2p_receive))
+                }
+                Button(
+                    onClick = onAddRemote,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Icon(Icons.Default.CloudDownload, contentDescription = null)
+                    Spacer(Modifier.width(8.dp))
+                    Text(stringResource(R.string.remote))
+                }
+                Button(
+                    onClick = onAddManual,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Icon(Icons.Default.EditNote, contentDescription = null)
+                    Spacer(Modifier.width(8.dp))
+                    Text(stringResource(R.string.manual_local))
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(android.R.string.cancel))
+            }
+        }
+    )
 }
 
 @Composable

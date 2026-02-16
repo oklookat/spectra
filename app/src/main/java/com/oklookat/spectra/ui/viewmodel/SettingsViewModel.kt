@@ -7,7 +7,6 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.oklookat.spectra.domain.usecase.settings.GetSettingsUseCase
 import com.oklookat.spectra.domain.usecase.settings.SetIpv6EnabledUseCase
-import com.oklookat.spectra.domain.usecase.settings.SetUseDebugConfigUseCase
 import com.oklookat.spectra.domain.usecase.settings.SetVpnSettingsUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.launchIn
@@ -18,7 +17,6 @@ import javax.inject.Inject
 @HiltViewModel
 class SettingsViewModel @Inject constructor(
     private val getSettingsUseCase: GetSettingsUseCase,
-    private val setUseDebugConfigUseCase: SetUseDebugConfigUseCase,
     private val setIpv6EnabledUseCase: SetIpv6EnabledUseCase,
     private val setVpnSettingsUseCase: SetVpnSettingsUseCase
 ) : ViewModel() {
@@ -30,7 +28,6 @@ class SettingsViewModel @Inject constructor(
         getSettingsUseCase()
             .onEach { settings ->
                 uiState = SettingsState(
-                    useDebugConfig = settings.useDebugConfig,
                     isIpv6Enabled = settings.isIpv6Enabled,
                     vpnAddress = settings.vpnAddress,
                     vpnDns = settings.vpnDns,
@@ -40,12 +37,6 @@ class SettingsViewModel @Inject constructor(
                 )
             }
             .launchIn(viewModelScope)
-    }
-
-    fun toggleDebugConfig(enabled: Boolean) {
-        viewModelScope.launch {
-            setUseDebugConfigUseCase(enabled)
-        }
     }
 
     fun toggleIpv6(enabled: Boolean) {

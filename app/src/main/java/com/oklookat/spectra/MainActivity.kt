@@ -168,15 +168,15 @@ class MainActivity : ComponentActivity() {
             val uiState = viewModel.uiState
             val settings = uiState.settings
 
-            if (!settings.useDebugConfig && config.isEmpty()) {
-                Toast.makeText(this@MainActivity, getString(R.string.select_profile_or_debug), Toast.LENGTH_LONG).show()
+            if (config.isEmpty()) {
+                Toast.makeText(this@MainActivity, getString(R.string.no_profiles_yet), Toast.LENGTH_LONG).show()
                 return@launch
             }
 
             XrayVpnService.startOrRestart(
                 context = this@MainActivity,
                 configJson = config,
-                profileId = if (settings.useDebugConfig) null else uiState.selectedProfileId,
+                profileId = uiState.selectedProfileId,
                 enableIpv6 = settings.isIpv6Enabled,
                 vpnAddress = settings.vpnAddress,
                 vpnDns = settings.vpnDns,

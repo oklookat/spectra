@@ -11,8 +11,6 @@ class PrepareVpnConfigUseCase @Inject constructor(
 ) {
     suspend operator fun invoke(): String {
         val settings = settingsRepository.settingsFlow.first()
-        if (settings.useDebugConfig) return ""
-        
         val profileId = settings.selectedProfileId ?: return ""
         val profile = profileRepository.getProfiles().find { it.id == profileId } ?: return ""
         

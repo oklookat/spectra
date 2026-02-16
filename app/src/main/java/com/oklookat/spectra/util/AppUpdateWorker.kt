@@ -7,15 +7,19 @@ import android.content.Context
 import android.content.Intent
 import android.os.Build
 import androidx.core.app.NotificationCompat
+import androidx.hilt.work.HiltWorker
 import androidx.work.*
 import com.oklookat.spectra.BuildConfig
 import com.oklookat.spectra.MainActivity
 import com.oklookat.spectra.R
+import dagger.assisted.Assisted
+import dagger.assisted.AssistedInject
 import java.util.concurrent.TimeUnit
 
-class AppUpdateWorker(
-    context: Context,
-    workerParams: WorkerParameters
+@HiltWorker
+class AppUpdateWorker @AssistedInject constructor(
+    @Assisted context: Context,
+    @Assisted workerParams: WorkerParameters
 ) : CoroutineWorker(context, workerParams) {
 
     override suspend fun doWork(): Result {
@@ -23,7 +27,11 @@ class AppUpdateWorker(
         if (updateUrl.isBlank()) return Result.success()
 
         val updateManager = UpdateManager(applicationContext)
-        val update = updateManager.checkForUpdates(updateUrl)
+        val update = try {
+            updateManager.checkForUpdates(updateUrl)
+        } catch (_: Exception) {
+            null
+        }
         
         if (update != null) {
             showUpdateNotification(update.versionName)
