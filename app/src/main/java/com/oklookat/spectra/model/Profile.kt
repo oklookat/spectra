@@ -17,5 +17,5 @@ data class Profile(
     val lastUpdated: Long = 0,
     val fileName: String? = null,
     val isImported: Boolean = false, // If true, it belongs to a remote group and cannot be edited
-    val lastPing: Long = -1 // Ping in milliseconds, -1 means no data or error
+    val lastPing: Long = 0 // Ping in milliseconds, 0 means no data, -1 means error/timeout
 )

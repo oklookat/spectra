@@ -1,56 +1,60 @@
+<?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Spectra</string>
     
-    <!-- Navigation -->
-    <string name="nav_home">Главная</string>
-    <string name="nav_profiles">Профили</string>
-    <string name="nav_logs">Логи</string>
-    <string name="nav_settings">Настройки</string>
-    <string name="nav_resources">Ресурсы</string>
+    <!-- Навигация и заголовки -->
+    <string name="home">Главная</string>
+    <string name="profiles">Профили</string>
+    <string name="logs">Логи</string>
+    <string name="settings">Настройки</string>
+    <string name="resources">Ресурсы</string>
 
-    <!-- Main Screen -->
+    <!-- Общие действия -->
+    <string name="add">Добавить</string>
+    <string name="save">Сохранить</string>
+    <string name="edit">Изменить</string>
+    <string name="delete">Удалить</string>
+    <string name="cancel">Отмена</string>
+    <string name="refresh">Обновить</string>
+    <string name="replace">Заменить</string>
+    <string name="accept">Принять</string>
+    <string name="configure">Настроить</string>
+    <string name="later">Позже</string>
+    <string name="ping">Пинг</string>
+    <string name="all">Все</string>
+
+    <!-- Главный экран -->
     <string name="disable_vpn">Отключить VPN</string>
     <string name="enable_vpn">Включить VPN</string>
 
-    <!-- Profiles Screen -->
-    <string name="profiles">Профили</string>
-    <string name="all">Все</string>
+    <!-- Экран профилей -->
     <string name="selected_count">Выбрано: %1$d</string>
-    <string name="delete">Удалить</string>
     <string name="add_profile">Добавить профиль</string>
     <string name="no_profiles_yet">Профилей пока нет</string>
-    <string name="refresh_all_remote">Обновить все</string>
+    <string name="refresh_all_remote">Обновить всё</string>
     <string name="import_from_file">Из файла</string>
     <string name="manual_local">Вручную</string>
-    <string name="remote">Из Интернета</string>
+    <string name="remote">По ссылке</string>
+    <string name="remote_desc">Импорт через URL</string>
+    <string name="import_file_desc">Импорт из файла</string>
+    <string name="manual_local_desc">Создать вручную</string>
     <string name="profile_updated">Профиль обновлен</string>
     <string name="update_failed">Ошибка обновления</string>
-    <string name="profiles_update_result">Обновлено: %1$d, Ошибок: %2$d</string>
-    <string name="add_remote_profile">Добавить из Интернета</string>
-    <string name="edit_remote_profile">Редактировать из Интернета</string>
+    <string name="profiles_update_result">Обновлено: %1$d, ошибок: %2$d</string>
     <string name="name">Название</string>
     <string name="url">URL</string>
     <string name="auto_update">Автообновление</string>
     <string name="auto_update_desc">Проверять обновления по ссылке</string>
     <string name="interval_minutes">Интервал (минуты)</string>
-    <string name="interval_minutes_hourly">Интервал (часы, мин. 1)</string>
-    <string name="add">Добавить</string>
-    <string name="save">Сохранить</string>
-    <string name="cancel">Отмена</string>
-    <string name="add_local_profile">Добавить вручную</string>
-    <string name="edit_local_profile">Редактировать вручную</string>
+    <string name="interval_minutes_hourly">Интервал (часы)</string>
     <string name="configuration_json">Конфигурация (JSON)</string>
     <string name="active">Активен</string>
-    <string name="refresh">Обновить</string>
-    <string name="edit">Изменить</string>
     <string name="failed_to_read_file">Не удалось прочитать файл</string>
     <string name="add_group">Добавить группу</string>
-    <string name="edit_group">Редактировать группу</string>
     <string name="delete_group">Удалить группу</string>
     <string name="share_group">Поделиться группой (P2P)</string>
     <string name="share_source_url">Поделиться URL</string>
-    <string name="url_optional_remote">URL (необязательно, для удаленной группы)</string>
-    <string name="ping">Пинг</string>
+    <string name="url_optional_remote">URL (необязательно)</string>
     <string name="sort">Сортировка</string>
     <string name="sort_as_is">Как есть</string>
     <string name="sort_by_name_asc">Название (А-Я)</string>
@@ -61,7 +65,7 @@
     <string name="invalid_url">Некорректная ссылка</string>
     <string name="min_15_min">Мин. 15 мин.</string>
 
-    <!-- Settings Screen -->
+    <!-- Экран настроек -->
     <string name="connection">Подключение</string>
     <string name="ipv6_support">Поддержка IPv6</string>
     <string name="enable_ipv6_tunneling">Включить туннелирование IPv6</string>
@@ -74,16 +78,15 @@
     <string name="easy_import_title">Быстрый импорт</string>
     <string name="supported_links">Поддерживаемые ссылки</string>
     <string name="supported_links_enabled">Включено</string>
-    <string name="supported_links_disabled">Не включено в настройках системы</string>
+    <string name="supported_links_disabled">Не включено в системе</string>
     <string name="app_updates">Обновления приложения</string>
     <string name="check_for_updates">Проверить обновления</string>
     <string name="up_to_date">Приложение обновлено</string>
-    <string name="resources">Ресурсы</string>
     <string name="manage_geo_files">Управление гео-файлами Xray</string>
 
-    <!-- Resources Screen -->
+    <!-- Экран ресурсов -->
     <string name="add_resource">Добавить ресурс</string>
-    <string name="reload_all">Обновить все</string>
+    <string name="reload_all">Обновить всё</string>
     <string name="file_from_url">По URL</string>
     <string name="file_from_storage">Из памяти</string>
     <string name="unique_name_required">Название должно быть уникальным</string>
@@ -103,24 +106,20 @@
     <string name="preset_loyalsoldier">Loyalsoldier/v2ray-rules-dat</string>
     <string name="applying_preset">Применение пресета: %1$s</string>
     <string name="downloading_file">Загрузка %1$s…</string>
-    <string name="resource_up_to_date">Обновление не требуется</string>
+    <string name="resource_up_to_date">Обновлено</string>
     <string name="all_resources_up_to_date">Все ресурсы актуальны</string>
 
-    <!-- Logs Screen -->
-    <string name="toggle_pause">Пауза/Возоновление</string>
+    <!-- Экран логов -->
+    <string name="toggle_pause">Пауза</string>
     <string name="copy_logs">Копировать логи</string>
     <string name="clear_logs">Очистить логи</string>
 
-    <!-- MainActivity & Dialogs -->
+    <!-- Диалоги и инфо -->
     <string name="vpn_permission_denied">В доступе к VPN отказано</string>
-    <string name="replace_profile_q">Заменить профиль?</string>
-    <string name="profile_exists_replace_q">Профиль с именем \'%1$s\' уже существует. Хотите заменить его?</string>
-    <string name="replace">Заменить</string>
+    <string name="replace_profile_q">Заменить профиль \'%1$s\'?</string>
     <string name="enable_easy_import">Включить быстрый импорт</string>
     <string name="easy_import_desc">Чтобы ссылки \'spectra.local\' открывались сразу в приложении, включите \'Поддерживаемые ссылки\' в настройках системы.</string>
-    <string name="configure">Настроить</string>
-    <string name="later">Позже</string>
-    <string name="deep_link_settings_not_available">Настройки глубоких ссылок недоступны на этом устройстве.</string>
+    <string name="deep_link_settings_not_available">Настройки ссылок недоступны</string>
     <string name="could_not_open_settings">Не удалось открыть настройки</string>
     <string name="invalid_link">Некорректная ссылка</string>
     <string name="profile_added">Профиль \'%1$s\' добавлен</string>
@@ -129,37 +128,30 @@
     <string name="failed_to_add_group">Не удалось добавить группу: %1$s</string>
     
     <!-- P2P -->
-    <string name="p2p_receive">Получить по P2P</string>
-    <string name="p2p_share">Поделиться по P2P</string>
-    <string name="p2p_receive_title">Получение профиля (P2P)</string>
-    <string name="p2p_scan_qr_desc">Отсканируйте этот QR-код с другого устройства, чтобы отправить сюда профиль.</string>
-    <string name="p2p_scan_title">Сканировать P2P QR</string>
+    <string name="p2p_receive">Получить (P2P)</string>
+    <string name="p2p_share">Поделиться (P2P)</string>
+    <string name="p2p_scan_qr_desc">Отсканируйте этот QR-код с другого устройства.</string>
+    <string name="p2p_scan_title">Сканирование QR</string>
     <string name="p2p_camera_permission_denied">Требуется доступ к камере</string>
-    <string name="p2p_accept_title">Принять?</string>
-    <string name="p2p_replace_title">Заменить?</string>
     <string name="p2p_share_msg">Устройство %1$s хочет поделиться \'%2$s\'.</string>
-    <string name="p2p_replace_msg">Этот объект уже существует. Хотите заменить его?</string>
+    <string name="p2p_replace_msg">Этот объект уже существует. Заменить?</string>
     <string name="p2p_sent_success">Отправлено успешно</string>
     <string name="p2p_send_failed">Ошибка отправки: %1$s</string>
-    <string name="p2p_server_error">Ошибка запуска P2P сервера: %1$s</string>
+    <string name="p2p_server_error">Ошибка P2P сервера: %1$s</string>
     <string name="p2p_processed">Объект \'%1$s\' обработан</string>
-    <string name="accept">Принять</string>
-    <string name="p2p_same_network_info">Убедитесь, что оба устройства подключены к одной Wi-Fi сети.</string>
+    <string name="p2p_same_network_info">Убедитесь, что оба устройства в одной Wi-Fi сети.</string>
     <string name="p2p_url">URL: %1$s</string>
     <string name="p2p_token">Токен: %1$s</string>
 
-    <!-- Notification -->
+    <!-- Уведомления и обновления -->
     <string name="notification_channel_name">Состояние сервиса</string>
     <string name="notification_content_active">VPN подключен</string>
     <string name="notification_action_stop">Остановить</string>
-
-    <!-- App Updates -->
     <string name="app_updates_channel_name">Обновления приложения</string>
     <string name="update_available_title">Доступно обновление</string>
     <string name="update_available_text">Доступна новая версия %1$s.</string>
-    <string name="update_dialog_title">Обновление Spectra</string>
-    <string name="update_dialog_message">Доступна новая версия (%1$s). Хотите обновить сейчас?</string>
+    <string name="update_dialog_message">Доступна новая версия (%1$s). Обновить сейчас?</string>
     <string name="update_now">Обновить</string>
-    <string name="downloading_update">Загрузка обновления...</string>
+    <string name="downloading_update">Загрузка обновления…</string>
     <string name="update_failed_msg">Не удалось загрузить обновление.</string>
 </resources>

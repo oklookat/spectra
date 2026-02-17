@@ -101,27 +101,29 @@ class ProfilesViewModel @Inject constructor(
 
     fun refresh(groupId: String? = null) {
         viewModelScope.launch {
-            if (groupId == null) {
-                // 1. "All" Screen: Refresh all remote profiles and all remote groups
-                refreshRemoteProfiles(null)
-                uiState.groups.filter { it.isRemote }.forEach { group ->
-                    refreshGroup(group)
-                }
-            } else {
-                val group = uiState.groups.find { it.id == groupId } ?: return@launch
-                if (group.isRemote) {
-                    // 2. Remote group: Refresh the group itself
-                    refreshGroup(group)
+            uiState = uiState.copy(isRefreshing = true)
+            try {
+                if (groupId == null) {
+                    refreshRemoteProfiles(null)
+                    uiState.groups.filter { it.isRemote }.forEach { group ->
+                        refreshGroupInternal(group)
+                    }
                 } else {
-                    // 3. Local group: Refresh only remote profiles within this group
-                    val profileIds = uiState.profiles
-                        .filter { it.groupId == groupId && it.isRemote && !it.isImported }
-                        .map { it.id }
-                        .toSet()
-                    if (profileIds.isNotEmpty()) {
-                        refreshRemoteProfiles(profileIds)
+                    val group = uiState.groups.find { it.id == groupId } ?: return@launch
+                    if (group.isRemote) {
+                        refreshGroupInternal(group)
+                    } else {
+                        val profileIds = uiState.profiles
+                            .filter { it.groupId == groupId && it.isRemote && !it.isImported }
+                            .map { it.id }
+                            .toSet()
+                        if (profileIds.isNotEmpty()) {
+                            refreshRemoteProfilesInternal(profileIds)
+                        }
                     }
                 }
+            } finally {
+                uiState = uiState.copy(isRefreshing = false)
             }
         }
     }
@@ -166,25 +168,6 @@ class ProfilesViewModel @Inject constructor(
         }
     }
 
-    fun replaceRemoteGroup(existingGroup: Group, url: String, autoUpdate: Boolean, interval: Int) {
-        viewModelScope.launch {
-            try {
-                val updatedGroup = existingGroup.copy(
-                    url = url,
-                    autoUpdateEnabled = autoUpdate,
-                    autoUpdateIntervalMinutes = interval,
-                    lastUpdated = System.currentTimeMillis()
-                )
-                updateGroupProfilesUseCase(updatedGroup)
-                saveGroupUseCase(updatedGroup)
-                _events.emit(MainUiEvent.ShowToast(messageResId = R.string.profile_updated))
-            } catch (e: Exception) {
-                LogManager.addLog("[App] Error replacing group: ${e.message}")
-                _events.emit(MainUiEvent.ShowToast(messageResId = R.string.update_failed))
-            }
-        }
-    }
-
     fun deleteGroup(groupId: String) {
         viewModelScope.launch {
             deleteGroupUseCase(groupId)
@@ -193,13 +176,22 @@ class ProfilesViewModel @Inject constructor(
 
     fun refreshGroup(group: Group) {
         viewModelScope.launch {
+            uiState = uiState.copy(isRefreshing = true)
             try {
-                updateGroupProfilesUseCase(group)
-                _events.emit(MainUiEvent.ShowToast(messageResId = R.string.profile_updated))
-            } catch (e: Exception) {
-                LogManager.addLog("[App] Error refreshing group: ${e.message}")
-                _events.emit(MainUiEvent.ShowToast(messageResId = R.string.update_failed))
+                refreshGroupInternal(group)
+            } finally {
+                uiState = uiState.copy(isRefreshing = false)
             }
+        }
+    }
+
+    private suspend fun refreshGroupInternal(group: Group) {
+        try {
+            updateGroupProfilesUseCase(group)
+            _events.emit(MainUiEvent.ShowToast(messageResId = R.string.profile_updated))
+        } catch (e: Exception) {
+            LogManager.addLog("[App] Error refreshing group: ${e.message}")
+            _events.emit(MainUiEvent.ShowToast(messageResId = R.string.update_failed))
         }
     }
 
@@ -256,60 +248,43 @@ class ProfilesViewModel @Inject constructor(
         }
     }
 
-    fun replaceRemoteProfile(existingProfile: Profile, url: String, autoUpdate: Boolean, interval: Int) {
+    fun refreshRemoteProfiles(ids: Set<String>? = null) {
         viewModelScope.launch {
+            uiState = uiState.copy(isRefreshing = true)
             try {
-                val fileName = existingProfile.fileName ?: "${existingProfile.id}.json"
-                val wasRunning = XrayVpnService.isServiceRunning && XrayVpnService.runningProfileId == existingProfile.id
-                val contentChanged = profileRepository.downloadProfile(url, fileName)
-                
-                val updatedProfile = existingProfile.copy(
-                    url = url,
-                    autoUpdateEnabled = autoUpdate,
-                    autoUpdateIntervalMinutes = interval,
-                    lastUpdated = System.currentTimeMillis(),
-                    fileName = fileName
-                )
-                
-                updateProfileUseCase(updatedProfile)
-                _events.emit(MainUiEvent.ShowToast(messageResId = R.string.profile_updated))
-                
-                if (wasRunning && contentChanged) _events.emit(MainUiEvent.RestartVpn)
-            } catch (e: Exception) {
-                LogManager.addLog("[App] Error replacing remote profile: ${e.message}")
-                _events.emit(MainUiEvent.ShowToast(messageResId = R.string.update_failed, isLong = true))
+                refreshRemoteProfilesInternal(ids)
+            } finally {
+                uiState = uiState.copy(isRefreshing = false)
             }
         }
     }
 
-    fun refreshRemoteProfiles(ids: Set<String>? = null) {
-        viewModelScope.launch {
-            val toRefresh = uiState.profiles.filter { it.isRemote && (ids == null || it.id in ids) && !it.isImported }
-            var success = 0
-            var failed = 0
-            var needsRestart = false
+    private suspend fun refreshRemoteProfilesInternal(ids: Set<String>? = null) {
+        val toRefresh = uiState.profiles.filter { it.isRemote && (ids == null || it.id in ids) && !it.isImported }
+        var success = 0
+        var failed = 0
+        var needsRestart = false
 
-            for (profile in toRefresh) {
-                try {
-                    val url = profile.url ?: continue
-                    val fileName = profile.fileName ?: continue
-                    val changed = profileRepository.downloadProfile(url, fileName)
-                    if (changed) {
-                        updateProfileUseCase(profile.copy(lastUpdated = System.currentTimeMillis()))
-                        if (XrayVpnService.isServiceRunning && XrayVpnService.runningProfileId == profile.id) needsRestart = true
-                    }
-                    success++
-                } catch (e: Exception) { 
-                    LogManager.addLog("[App] Failed to refresh profile '${profile.name}': ${e.message}")
-                    failed++ 
+        for (profile in toRefresh) {
+            try {
+                val url = profile.url ?: continue
+                val fileName = profile.fileName ?: continue
+                val changed = profileRepository.downloadProfile(url, fileName)
+                if (changed) {
+                    updateProfileUseCase(profile.copy(lastUpdated = System.currentTimeMillis()))
+                    if (XrayVpnService.isServiceRunning && XrayVpnService.runningProfileId == profile.id) needsRestart = true
                 }
+                success++
+            } catch (e: Exception) { 
+                LogManager.addLog("[App] Failed to refresh profile '${profile.name}': ${e.message}")
+                failed++ 
             }
-            
-            if (ids == null) {
-                _events.emit(MainUiEvent.ShowToast(messageResId = R.string.profiles_update_result, formatArgs = listOf(success, failed)))
-            }
-            if (needsRestart) _events.emit(MainUiEvent.RestartVpn)
         }
+        
+        if (ids == null) {
+            _events.emit(MainUiEvent.ShowToast(messageResId = R.string.profiles_update_result, formatArgs = listOf(success, failed)))
+        }
+        if (needsRestart) _events.emit(MainUiEvent.RestartVpn)
     }
 
     private suspend fun updateProfileInternal(profile: Profile, content: String? = null): Boolean {

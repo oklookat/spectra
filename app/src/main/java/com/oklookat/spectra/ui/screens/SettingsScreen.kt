@@ -10,11 +10,13 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.oklookat.spectra.BuildConfig
 import com.oklookat.spectra.R
+import com.oklookat.spectra.ui.components.AppListItem
+import com.oklookat.spectra.ui.components.AppSwitch
+import com.oklookat.spectra.ui.components.SettingsSectionTitle
 import com.oklookat.spectra.ui.viewmodel.SettingsState
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -31,7 +33,7 @@ fun SettingsScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(stringResource(R.string.nav_settings)) }
+                title = { Text(stringResource(R.string.settings)) }
             )
         }
     ) { padding ->
@@ -41,25 +43,44 @@ fun SettingsScreen(
                 .padding(padding)
                 .verticalScroll(rememberScrollState())
         ) {
-            SettingsSectionTitle(stringResource(R.string.connection))
+            // 1. Resources
+            SettingsSectionTitle(stringResource(R.string.resources))
+            AppListItem(
+                headlineContent = { Text(stringResource(R.string.resources)) },
+                supportingContent = { Text(stringResource(R.string.manage_geo_files)) },
+                leadingContent = { Icon(Icons.Default.Folder, contentDescription = null) },
+                trailingContent = {
+                    Button(onClick = onOpenResources) {
+                        Text(stringResource(R.string.configure))
+                    }
+                },
+                onClick = onOpenResources,
+                isTv = isTv
+            )
 
-            ListItem(
+            HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp))
+
+            // 2. Connection & IPv6
+            SettingsSectionTitle(stringResource(R.string.connection))
+            AppListItem(
                 headlineContent = { Text(stringResource(R.string.ipv6_support)) },
                 supportingContent = { Text(stringResource(R.string.enable_ipv6_tunneling)) },
                 leadingContent = { Icon(Icons.Default.Public, contentDescription = null) },
                 trailingContent = {
-                    Switch(
+                    AppSwitch(
                         checked = uiState.isIpv6Enabled,
                         onCheckedChange = onToggleIpv6,
-                        enabled = !isVpnEnabled
+                        enabled = !isVpnEnabled,
+                        isTv = isTv
                     )
-                }
+                },
+                isTv = isTv
             )
 
             HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
 
+            // 3. Tunnel (IPv4/IPv6)
             SettingsSectionTitle(stringResource(R.string.tunnel_ipv4))
-
             TunnelSettings(
                 address = uiState.vpnAddress,
                 dns = uiState.vpnDns,
@@ -79,8 +100,10 @@ fun SettingsScreen(
             }
 
             HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp))
-            SettingsSectionTitle(stringResource(R.string.advanced))
 
+            // 4. Advanced & Import
+            SettingsSectionTitle(stringResource(R.string.advanced))
+            
             // MTU Setting
             var mtuText by remember(uiState.vpnMtu) { mutableStateOf(uiState.vpnMtu.toString()) }
             OutlinedTextField(
@@ -98,23 +121,9 @@ fun SettingsScreen(
                 singleLine = true
             )
 
-            HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp))
-            SettingsSectionTitle(stringResource(R.string.resources))
-            ListItem(
-                headlineContent = { Text(stringResource(R.string.resources)) },
-                supportingContent = { Text(stringResource(R.string.manage_geo_files)) },
-                leadingContent = { Icon(Icons.Default.Folder, contentDescription = null) },
-                trailingContent = {
-                    Button(onClick = onOpenResources) {
-                        Text(stringResource(R.string.configure))
-                    }
-                }
-            )
-
             if(!isTv) {
-                HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp))
-                SettingsSectionTitle(stringResource(R.string.easy_import_title))
-                ListItem(
+                Spacer(modifier = Modifier.height(16.dp))
+                AppListItem(
                     headlineContent = { Text(stringResource(R.string.supported_links)) },
                     supportingContent = {
                         Text(
@@ -133,10 +142,11 @@ fun SettingsScreen(
                 )
             }
 
+            // 5. App (Updates)
             if (BuildConfig.UPDATE_URL.isNotBlank()) {
                 HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp))
                 SettingsSectionTitle(stringResource(R.string.app_updates))
-                ListItem(
+                AppListItem(
                     headlineContent = { Text(stringResource(R.string.app_updates)) },
                     supportingContent = { Text(stringResource(R.string.check_for_updates)) },
                     leadingContent = { Icon(Icons.Default.Update, contentDescription = null) },
@@ -144,7 +154,8 @@ fun SettingsScreen(
                         Button(onClick = { /* Handled via MainViewModel via global events */ }) {
                             Text(stringResource(R.string.refresh))
                         }
-                    }
+                    },
+                    isTv = isTv
                 )
             }
             
@@ -181,15 +192,4 @@ fun TunnelSettings(
             singleLine = true
         )
     }
-}
-
-@Composable
-fun SettingsSectionTitle(title: String) {
-    Text(
-        text = title,
-        style = MaterialTheme.typography.labelLarge,
-        color = MaterialTheme.colorScheme.primary,
-        fontWeight = FontWeight.SemiBold,
-        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
-    )
 }

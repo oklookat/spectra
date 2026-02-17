@@ -108,7 +108,10 @@ private fun TvAppStructure(
     val currentScreen = Screen.fromRoute(currentRoute)
 
     Row(modifier = Modifier.fillMaxSize()) {
-        NavigationRail {
+        NavigationRail(
+            containerColor = MaterialTheme.colorScheme.background,
+            contentColor = MaterialTheme.colorScheme.onSurfaceVariant
+        ) {
             Screen.entries.filter { it.showInNav }.forEach { screen ->
                 val label = stringResource(screen.labelRes)
                 NavigationRailItem(
@@ -123,7 +126,14 @@ private fun TvAppStructure(
                         }
                     },
                     icon = { Icon(screen.icon, contentDescription = label) },
-                    label = { Text(text = label) }
+                    label = { Text(text = label) },
+                    colors = NavigationRailItemDefaults.colors(
+                        selectedIconColor = MaterialTheme.colorScheme.primary,
+                        unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                        selectedTextColor = MaterialTheme.colorScheme.primary,
+                        unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                        indicatorColor = MaterialTheme.colorScheme.primaryContainer
+                    )
                 )
             }
         }

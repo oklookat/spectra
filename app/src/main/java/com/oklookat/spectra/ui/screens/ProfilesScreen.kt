@@ -1,36 +1,39 @@
 package com.oklookat.spectra.ui.screens
 
-import android.content.Intent
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.FormatListBulleted
-import androidx.compose.material.icons.automirrored.filled.Sort
-import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material3.*
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.hilt.navigation.compose.hiltViewModel
 import com.oklookat.spectra.R
 import com.oklookat.spectra.model.Group
+import com.oklookat.spectra.model.P2PPayload
 import com.oklookat.spectra.model.Profile
 import com.oklookat.spectra.ui.components.*
 import com.oklookat.spectra.ui.viewmodel.MainViewModel
 import com.oklookat.spectra.ui.viewmodel.ProfileSort
 import com.oklookat.spectra.ui.viewmodel.ProfilesViewModel
 import com.oklookat.spectra.util.TvUtils
-import androidx.hilt.navigation.compose.hiltViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -43,6 +46,7 @@ fun ProfilesScreen(
     val uiState = viewModel.uiState
     val mainUiState = mainViewModel.uiState
     val listState = rememberLazyListState()
+    val gridState = rememberLazyGridState()
     
     var selectedGroupIndex by remember { mutableIntStateOf(0) }
     val selectedGroup = remember(selectedGroupIndex, uiState.groups) {
@@ -50,14 +54,20 @@ fun ProfilesScreen(
         else uiState.groups.getOrNull(selectedGroupIndex - 1)
     }
 
-    // Scroll to top when group changes
-    LaunchedEffect(selectedGroupIndex) {
-        listState.scrollToItem(0)
+    val targetGroupId = remember(selectedGroup) {
+        if (selectedGroup == null || selectedGroup.isRemote) {
+            Group.DEFAULT_GROUP_ID
+        } else {
+            selectedGroup.id
+        }
     }
 
-    // Scroll to top when sort order changes
+    LaunchedEffect(selectedGroupIndex) {
+        if (isTv) gridState.scrollToItem(0) else listState.scrollToItem(0)
+    }
+
     LaunchedEffect(uiState.sortOrder) {
-        listState.scrollToItem(0)
+        if (isTv) gridState.scrollToItem(0) else listState.scrollToItem(0)
     }
 
     var showMenu by remember { mutableStateOf(false) }
@@ -66,6 +76,7 @@ fun ProfilesScreen(
     var showGroupMenu by remember { mutableStateOf(false) }
     var showSortMenu by remember { mutableStateOf(false) }
     
+    var showAddProfileMethodDialog by remember { mutableStateOf(false) }
     var showRemoteDialog by remember { mutableStateOf(false) }
     var showLocalDialog by remember { mutableStateOf(false) }
     var editingProfile by remember { mutableStateOf<Profile?>(null) }
@@ -73,6 +84,9 @@ fun ProfilesScreen(
     
     var selectedIds by remember { mutableStateOf(setOf<String>()) }
     val isSelectionMode = selectedIds.isNotEmpty()
+
+    var showP2PScanner by remember { mutableStateOf(false) }
+    var p2pPayloadToSend by remember { mutableStateOf<P2PPayload?>(null) }
 
     val filePicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
         uri?.let {
@@ -91,7 +105,10 @@ fun ProfilesScreen(
         selectedIds = emptySet()
     }
 
+    val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior()
+
     Scaffold(
+        modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
         topBar = {
             ProfilesTopBar(
                 isSelectionMode = isSelectionMode,
@@ -100,6 +117,7 @@ fun ProfilesScreen(
                 groups = uiState.groups,
                 selectedGroupIndex = selectedGroupIndex,
                 isTv = isTv,
+                scrollBehavior = scrollBehavior,
                 onClearSelection = { selectedIds = emptySet() },
                 onDeleteSelection = {
                     viewModel.deleteProfiles(selectedIds)
@@ -114,7 +132,24 @@ fun ProfilesScreen(
                 onShowGroupMenu = showGroupMenu,
                 onDismissGroupMenu = { showGroupMenu = false },
                 onShareGroup = {
-                    // TODO: Implement P2P Sharing
+                    selectedGroup?.let { group ->
+                        p2pPayloadToSend = if (group.isRemote) {
+                            P2PPayload(
+                                group = group,
+                                groupProfiles = null
+                            )
+                        } else {
+                            val groupProfiles = uiState.profiles
+                                .filter { it.groupId == group.id }
+                                .map { it to viewModel.getProfileContent(it) }
+                            
+                            P2PPayload(
+                                group = group,
+                                groupProfiles = groupProfiles
+                            )
+                        }
+                        showP2PScanner = true
+                    }
                 },
                 onEditGroup = {
                     editingGroup = selectedGroup
@@ -124,26 +159,22 @@ fun ProfilesScreen(
                 onDeleteGroup = { viewModel.deleteGroup(selectedGroup!!.id) },
                 onPingAll = { viewModel.measureAllPings(selectedGroup?.id) },
                 onShowSortMenu = { showSortMenu = true },
-                // TV Actions
                 onAddProfileClick = { showMenu = true }
             )
         },
         floatingActionButton = {
-            if (!isTv && !isSelectionMode && (selectedGroup == null || !selectedGroup.isRemote)) {
+            if (!isTv && !isSelectionMode) {
                 ProfilesFab(
                     onShowMenu = { showMenu = true },
                     showMenu = showMenu,
                     onDismissMenu = { showMenu = false },
                     onP2PReceive = { mainViewModel.startP2PServer() },
-                    onAddRemote = {
-                        editingProfile = null
-                        showRemoteDialog = true
+                    onAddGroup = {
+                        editingGroup = null
+                        showGroupDialog = true
                     },
-                    onImportFile = { filePicker.launch("application/json") },
-                    onAddManual = {
-                        editingProfile = null
-                        importedContent = ""
-                        showLocalDialog = true
+                    onAddProfile = {
+                        showAddProfileMethodDialog = true
                     }
                 )
             }
@@ -166,68 +197,173 @@ fun ProfilesScreen(
             }
         }
 
-        Box(
+        PullToRefreshBox(
+            isRefreshing = uiState.isRefreshing,
+            onRefresh = { viewModel.refresh(selectedGroup?.id) },
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
         ) {
-            LazyColumn(
-                state = listState,
-                modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(16.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                items(filteredProfiles, key = { it.id }) { profile ->
-                    ProfileItem(
-                        profile = profile,
-                        isSelectedForDeletion = selectedIds.contains(profile.id),
-                        isActive = uiState.selectedProfileId == profile.id,
-                        isTv = isTv,
-                        onLongClick = {
-                            if (!isSelectionMode) selectedIds = setOf(profile.id)
-                        },
-                        onClick = {
-                            if (isSelectionMode) {
-                                selectedIds = if (selectedIds.contains(profile.id)) {
-                                    selectedIds - profile.id
-                                } else {
-                                    selectedIds + profile.id
-                                }
-                            } else {
-                                viewModel.selectProfile(profile.id)
-                            }
-                        },
-                        onEditClick = {
-                            editingProfile = profile
-                            importedContent = ""
-                            if (profile.isRemote) {
-                                showRemoteDialog = true
-                            } else {
-                                showLocalDialog = true
-                            }
-                        },
-                        onRefreshClick = {
-                            viewModel.refreshRemoteProfiles(setOf(profile.id))
-                        },
-                        onShareP2PClick = {
-                            // TODO: Implement P2P Sharing
-                        },
-                        onDeleteClick = {
-                            viewModel.deleteProfiles(setOf(profile.id))
-                        },
-                        onPingClick = {
-                            viewModel.measurePing(profile)
-                        }
-                    )
-                }
-            }
-
             if (filteredProfiles.isEmpty()) {
-                Text(
-                    stringResource(R.string.no_profiles_yet),
-                    modifier = Modifier.align(Alignment.Center),
-                    style = MaterialTheme.typography.bodyLarge
-                )
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(16.dp),
+                        modifier = Modifier.padding(32.dp)
+                    ) {
+                        Surface(
+                            shape = MaterialTheme.shapes.extraLarge,
+                            color = MaterialTheme.colorScheme.surfaceVariant,
+                            modifier = Modifier.size(80.dp)
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(
+                                    Icons.Default.Add,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(40.dp),
+                                    tint = MaterialTheme.colorScheme.primary
+                                )
+                            }
+                        }
+                        Text(
+                            stringResource(R.string.no_profiles_yet),
+                            style = MaterialTheme.typography.headlineSmall,
+                            textAlign = TextAlign.Center,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Text(
+                            "Add a new profile or group to get started.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            textAlign = TextAlign.Center,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Button(
+                            onClick = { showAddProfileMethodDialog = true },
+                            modifier = Modifier.padding(top = 8.dp)
+                        ) {
+                            Icon(Icons.Default.Add, contentDescription = null)
+                            Spacer(Modifier.width(8.dp))
+                            Text("Add Profile")
+                        }
+                    }
+                }
+            } else {
+                if (isTv) {
+                    LazyVerticalGrid(
+                        columns = GridCells.Fixed(2),
+                        state = gridState,
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = PaddingValues(16.dp),
+                        horizontalArrangement = Arrangement.spacedBy(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(16.dp)
+                    ) {
+                        items(items = filteredProfiles, key = { it.id }) { profile ->
+                            ProfileItem(
+                                profile = profile,
+                                isSelectedForDeletion = selectedIds.contains(profile.id),
+                                isActive = uiState.selectedProfileId == profile.id,
+                                isTv = true,
+                                onLongClick = {
+                                    if (!isSelectionMode) selectedIds = setOf(profile.id)
+                                },
+                                onClick = {
+                                    if (isSelectionMode) {
+                                        selectedIds = if (selectedIds.contains(profile.id)) {
+                                            selectedIds - profile.id
+                                        } else {
+                                            selectedIds + profile.id
+                                        }
+                                    } else {
+                                        viewModel.selectProfile(profile.id)
+                                    }
+                                },
+                                onEditClick = {
+                                    editingProfile = profile
+                                    importedContent = ""
+                                    if (profile.isRemote) {
+                                        showRemoteDialog = true
+                                    } else {
+                                        showLocalDialog = true
+                                    }
+                                },
+                                onRefreshClick = {
+                                    viewModel.refreshRemoteProfiles(setOf(profile.id))
+                                },
+                                onShareP2PClick = {
+                                    p2pPayloadToSend = P2PPayload(
+                                        profile = profile,
+                                        profileContent = viewModel.getProfileContent(profile)
+                                    )
+                                    showP2PScanner = true
+                                },
+                                onDeleteClick = {
+                                    viewModel.deleteProfiles(setOf(profile.id))
+                                },
+                                onPingClick = {
+                                    viewModel.measurePing(profile)
+                                }
+                            )
+                        }
+                    }
+                } else {
+                    LazyColumn(
+                        state = listState,
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = PaddingValues(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        items(items = filteredProfiles, key = { it.id }) { profile ->
+                            ProfileItem(
+                                profile = profile,
+                                isSelectedForDeletion = selectedIds.contains(profile.id),
+                                isActive = uiState.selectedProfileId == profile.id,
+                                isTv = false,
+                                onLongClick = {
+                                    if (!isSelectionMode) selectedIds = setOf(profile.id)
+                                },
+                                onClick = {
+                                    if (isSelectionMode) {
+                                        selectedIds = if (selectedIds.contains(profile.id)) {
+                                            selectedIds - profile.id
+                                        } else {
+                                            selectedIds + profile.id
+                                        }
+                                    } else {
+                                        viewModel.selectProfile(profile.id)
+                                    }
+                                },
+                                onEditClick = {
+                                    editingProfile = profile
+                                    importedContent = ""
+                                    if (profile.isRemote) {
+                                        showRemoteDialog = true
+                                    } else {
+                                        showLocalDialog = true
+                                    }
+                                },
+                                onRefreshClick = {
+                                    viewModel.refreshRemoteProfiles(setOf(profile.id))
+                                },
+                                onShareP2PClick = {
+                                    p2pPayloadToSend = P2PPayload(
+                                        profile = profile,
+                                        profileContent = viewModel.getProfileContent(profile)
+                                    )
+                                    showP2PScanner = true
+                                },
+                                onDeleteClick = {
+                                    viewModel.deleteProfiles(setOf(profile.id))
+                                },
+                                onPingClick = {
+                                    viewModel.measurePing(profile)
+                                }
+                            )
+                        }
+                    }
+                }
             }
         }
     }
@@ -248,21 +384,40 @@ fun ProfilesScreen(
         }
     }
 
-    // Reuse ProfilesFab logic for TV menu (shows when showMenu is true)
     if (isTv && showMenu) {
-        TvAddProfileMenu(
+        TvAddMenu(
             onDismiss = { showMenu = false },
             onP2PReceive = { 
                 showMenu = false
                 mainViewModel.startP2PServer() 
             },
-            onAddRemote = {
+            onAddGroup = {
                 showMenu = false
+                editingGroup = null
+                showGroupDialog = true
+            },
+            onAddProfile = {
+                showMenu = false
+                showAddProfileMethodDialog = true
+            }
+        )
+    }
+
+    if (showAddProfileMethodDialog) {
+        AddProfileMethodDialog(
+            isTv = isTv,
+            onDismiss = { showAddProfileMethodDialog = false },
+            onAddRemote = {
+                showAddProfileMethodDialog = false
                 editingProfile = null
                 showRemoteDialog = true
             },
+            onImportFile = {
+                showAddProfileMethodDialog = false
+                filePicker.launch("application/json")
+            },
             onAddManual = {
-                showMenu = false
+                showAddProfileMethodDialog = false
                 editingProfile = null
                 importedContent = ""
                 showLocalDialog = true
@@ -270,7 +425,6 @@ fun ProfilesScreen(
         )
     }
 
-    // Dialogs...
     if (showGroupDialog) {
         GroupDialog(
             group = editingGroup,
@@ -299,6 +453,22 @@ fun ProfilesScreen(
         )
     }
 
+    if (showP2PScanner) {
+        P2PScannerDialog(
+            onDismiss = { 
+                showP2PScanner = false
+                p2pPayloadToSend = null
+            },
+            onQrScanned = { url, token ->
+                p2pPayloadToSend?.let { payload ->
+                    mainViewModel.sendP2PPayload(url, token, payload)
+                }
+                showP2PScanner = false
+                p2pPayloadToSend = null
+            }
+        )
+    }
+
     mainUiState.p2pPayloadToAccept?.let { payload ->
         P2PConfirmDialog(
             deviceName = payload.deviceName,
@@ -317,7 +487,7 @@ fun ProfilesScreen(
                 editingProfile = null
             },
             onConfirm = { name, url, autoUpdate, interval ->
-                viewModel.saveRemoteProfile(editingProfile, name, url, autoUpdate, interval, selectedGroup?.id ?: Group.DEFAULT_GROUP_ID) {
+                viewModel.saveRemoteProfile(editingProfile, name, url, autoUpdate, interval, targetGroupId) {
                     showRemoteDialog = false
                     editingProfile = null
                 }
@@ -342,7 +512,7 @@ fun ProfilesScreen(
                 importedContent = ""
             },
             onConfirm = { name, content ->
-                viewModel.saveLocalProfile(editingProfile, name, content, selectedGroup?.id ?: Group.DEFAULT_GROUP_ID) {
+                viewModel.saveLocalProfile(editingProfile, name, content, targetGroupId) {
                     showLocalDialog = false
                     editingProfile = null
                     importedContent = ""
@@ -355,34 +525,8 @@ fun ProfilesScreen(
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun SortBottomSheet(
-    selectedSort: ProfileSort,
-    onSortSelected: (ProfileSort) -> Unit,
-    onDismiss: () -> Unit
-) {
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        sheetState = rememberModalBottomSheetState()
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(bottom = 24.dp)
-        ) {
-            Text(
-                text = stringResource(R.string.sort),
-                style = MaterialTheme.typography.titleLarge,
-                modifier = Modifier.padding(16.dp)
-            )
-            SortOptionsList(selectedSort, onSortSelected, onDismiss)
-        }
-    }
-}
-
-@Composable
-private fun SortDialog(
+fun SortDialog(
     selectedSort: ProfileSort,
     onSortSelected: (ProfileSort) -> Unit,
     onDismiss: () -> Unit
@@ -392,378 +536,62 @@ private fun SortDialog(
         title = { Text(stringResource(R.string.sort)) },
         text = {
             Column {
-                SortOptionsList(selectedSort, onSortSelected, onDismiss)
+                ProfileSort.entries.forEach { sort ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { 
+                                onSortSelected(sort)
+                                onDismiss()
+                            }
+                            .padding(vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        RadioButton(
+                            selected = selectedSort == sort,
+                            onClick = null
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(stringResource(sort.labelResId))
+                    }
+                }
             }
         },
         confirmButton = {
-            TextButton(onClick = onDismiss) {
-                Text(stringResource(android.R.string.cancel))
-            }
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) }
         }
-    )
-}
-
-@Composable
-private fun SortOptionsList(
-    selectedSort: ProfileSort,
-    onSortSelected: (ProfileSort) -> Unit,
-    onDismiss: () -> Unit
-) {
-    Column {
-        SortItem(
-            sort = ProfileSort.AS_IS,
-            isSelected = selectedSort == ProfileSort.AS_IS,
-            onClick = { onSortSelected(ProfileSort.AS_IS); onDismiss() }
-        )
-        HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-        
-        SortItem(
-            sort = ProfileSort.BY_NAME_ASC,
-            isSelected = selectedSort == ProfileSort.BY_NAME_ASC,
-            onClick = { onSortSelected(ProfileSort.BY_NAME_ASC); onDismiss() }
-        )
-        SortItem(
-            sort = ProfileSort.BY_NAME_DESC,
-            isSelected = selectedSort == ProfileSort.BY_NAME_DESC,
-            onClick = { onSortSelected(ProfileSort.BY_NAME_DESC); onDismiss() }
-        )
-        HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-        
-        SortItem(
-            sort = ProfileSort.BY_PING_ASC,
-            isSelected = selectedSort == ProfileSort.BY_PING_ASC,
-            onClick = { onSortSelected(ProfileSort.BY_PING_ASC); onDismiss() }
-        )
-        SortItem(
-            sort = ProfileSort.BY_PING_DESC,
-            isSelected = selectedSort == ProfileSort.BY_PING_DESC,
-            onClick = { onSortSelected(ProfileSort.BY_PING_DESC); onDismiss() }
-        )
-    }
-}
-
-@Composable
-private fun SortItem(
-    sort: ProfileSort,
-    isSelected: Boolean,
-    onClick: () -> Unit
-) {
-    val label = when (sort) {
-        ProfileSort.AS_IS -> stringResource(R.string.sort_as_is)
-        ProfileSort.BY_NAME_ASC -> stringResource(R.string.sort_by_name_asc)
-        ProfileSort.BY_NAME_DESC -> stringResource(R.string.sort_by_name_desc)
-        ProfileSort.BY_PING_ASC -> stringResource(R.string.sort_by_ping_asc)
-        ProfileSort.BY_PING_DESC -> stringResource(R.string.sort_by_ping_desc)
-    }
-    val icon = when (sort) {
-        ProfileSort.AS_IS -> Icons.AutoMirrored.Filled.FormatListBulleted
-        ProfileSort.BY_NAME_ASC -> Icons.Default.SortByAlpha
-        ProfileSort.BY_NAME_DESC -> Icons.Default.SortByAlpha
-        ProfileSort.BY_PING_ASC -> Icons.Default.Speed
-        ProfileSort.BY_PING_DESC -> Icons.Default.Speed
-    }
-
-    val color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
-
-    ListItem(
-        headlineContent = { 
-            Text(
-                text = label,
-                color = color,
-                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
-            ) 
-        },
-        leadingContent = { 
-            Icon(
-                imageVector = icon, 
-                contentDescription = null,
-                tint = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
-            ) 
-        },
-        trailingContent = {
-            if (isSelected) {
-                Icon(
-                    imageVector = Icons.Default.Check,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary
-                )
-            }
-        },
-        colors = ListItemDefaults.colors(containerColor = Color.Transparent),
-        modifier = Modifier.clickable(onClick = onClick)
     )
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun ProfilesTopBar(
-    isSelectionMode: Boolean,
-    selectedCount: Int,
-    selectedGroup: Group?,
-    groups: List<Group>,
-    selectedGroupIndex: Int,
-    isTv: Boolean,
-    onClearSelection: () -> Unit,
-    onDeleteSelection: () -> Unit,
-    onGroupClick: (Int) -> Unit,
-    onAddGroupClick: () -> Unit,
-    onGroupMenuClick: () -> Unit,
-    onShowGroupMenu: Boolean,
-    onDismissGroupMenu: () -> Unit,
-    onShareGroup: () -> Unit,
-    onEditGroup: () -> Unit,
-    onRefresh: () -> Unit,
-    onDeleteGroup: () -> Unit,
-    onPingAll: () -> Unit = {},
-    onShowSortMenu: () -> Unit = {},
-    // TV Actions
-    onAddProfileClick: () -> Unit = {}
+fun SortBottomSheet(
+    selectedSort: ProfileSort,
+    onSortSelected: (ProfileSort) -> Unit,
+    onDismiss: () -> Unit
 ) {
-    val context = LocalContext.current
-    
-    Column {
-        if (isSelectionMode) {
-            TopAppBar(
-                title = { Text(stringResource(R.string.selected_count, selectedCount)) },
-                navigationIcon = {
-                    IconButton(onClick = onClearSelection) {
-                        Icon(Icons.Default.Close, contentDescription = null)
-                    }
-                },
-                actions = {
-                    IconButton(onClick = onDeleteSelection) {
-                        Icon(Icons.Default.Delete, contentDescription = stringResource(R.string.delete))
-                    }
-                }
+    ModalBottomSheet(onDismissRequest = onDismiss) {
+        Column(modifier = Modifier.padding(bottom = 32.dp)) {
+            Text(
+                stringResource(R.string.sort),
+                style = MaterialTheme.typography.titleLarge,
+                modifier = Modifier.padding(16.dp)
             )
-        } else {
-            TopAppBar(
-                title = { Text(stringResource(R.string.profiles)) },
-                actions = {
-                    if (isTv) {
-                        IconButton(onClick = onRefresh) {
-                            Icon(Icons.Default.Refresh, contentDescription = stringResource(R.string.refresh))
-                        }
-                        IconButton(onClick = onAddProfileClick) {
-                            Icon(Icons.Default.Add, contentDescription = stringResource(R.string.add_profile))
-                        }
-                    }
-
-                    IconButton(onClick = onShowSortMenu) {
-                        Icon(Icons.AutoMirrored.Filled.Sort, contentDescription = stringResource(R.string.sort))
-                    }
-
-                    Box {
-                        IconButton(onClick = onGroupMenuClick) {
-                            Icon(Icons.Default.MoreVert, contentDescription = "Actions")
-                        }
-                        DropdownMenu(
-                            expanded = onShowGroupMenu,
-                            onDismissRequest = onDismissGroupMenu
-                        ) {
-                            DropdownMenuItem(
-                                text = { Text(stringResource(R.string.refresh)) },
-                                leadingIcon = { Icon(Icons.Default.Refresh, contentDescription = null) },
-                                onClick = {
-                                    onDismissGroupMenu()
-                                    onRefresh()
-                                }
-                            )
-                            DropdownMenuItem(
-                                text = { Text(stringResource(R.string.ping)) },
-                                leadingIcon = { Icon(Icons.Default.Speed, contentDescription = null) },
-                                onClick = {
-                                    onDismissGroupMenu()
-                                    onPingAll()
-                                }
-                            )
-                            
-                            if (selectedGroup != null) {
-                                if (!isTv) {
-                                    DropdownMenuItem(
-                                        text = { Text(stringResource(R.string.share_group)) },
-                                        leadingIcon = { Icon(Icons.Default.Share, contentDescription = null) },
-                                        onClick = {
-                                            onDismissGroupMenu()
-                                            onShareGroup()
-                                        }
-                                    )
-                                    if (!selectedGroup.url.isNullOrBlank()) {
-                                        DropdownMenuItem(
-                                            text = { Text(stringResource(R.string.share_source_url)) },
-                                            leadingIcon = { Icon(Icons.Default.Link, contentDescription = null) },
-                                            onClick = {
-                                                onDismissGroupMenu()
-                                                val sendIntent: Intent = Intent().apply {
-                                                    action = Intent.ACTION_SEND
-                                                    putExtra(Intent.EXTRA_TEXT, selectedGroup.url)
-                                                    type = "text/plain"
-                                                }
-                                                val shareIntent = Intent.createChooser(sendIntent, null)
-                                                context.startActivity(shareIntent)
-                                            }
-                                        )
-                                    }
-                                }
-                                if (selectedGroup.id != Group.DEFAULT_GROUP_ID) {
-                                    DropdownMenuItem(
-                                        text = { Text(stringResource(R.string.edit_group)) },
-                                        leadingIcon = { Icon(Icons.Default.Edit, contentDescription = null) },
-                                        onClick = {
-                                            onDismissGroupMenu()
-                                            onEditGroup()
-                                        }
-                                    )
-                                    HorizontalDivider()
-                                    DropdownMenuItem(
-                                        text = { Text(stringResource(R.string.delete_group)) },
-                                        leadingIcon = { Icon(Icons.Default.Delete, contentDescription = null) },
-                                        onClick = {
-                                            onDismissGroupMenu()
-                                            onDeleteGroup()
-                                        },
-                                        colors = MenuDefaults.itemColors(
-                                            textColor = MaterialTheme.colorScheme.error,
-                                            leadingIconColor = MaterialTheme.colorScheme.error
-                                        )
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
-            )
-        }
-
-        ScrollableTabRow(
-            selectedTabIndex = selectedGroupIndex,
-            edgePadding = 16.dp,
-            divider = {},
-            containerColor = MaterialTheme.colorScheme.surface
-        ) {
-            Tab(
-                selected = selectedGroupIndex == 0,
-                onClick = { onGroupClick(0) },
-                text = { Text(stringResource(R.string.all)) }
-            )
-            groups.forEachIndexed { index, group ->
-                Tab(
-                    selected = selectedGroupIndex == index + 1,
-                    onClick = { onGroupClick(index + 1) },
-                    text = { 
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            if (group.isRemote) {
-                                Icon(Icons.Default.Cloud, contentDescription = null, modifier = Modifier.size(16.dp))
-                                Spacer(Modifier.width(4.dp))
-                            }
-                            Text(group.name)
-                        }
+            ProfileSort.entries.forEach { sort ->
+                ListItem(
+                    headlineContent = { Text(stringResource(sort.labelResId)) },
+                    leadingContent = {
+                        RadioButton(
+                            selected = selectedSort == sort,
+                            onClick = null
+                        )
+                    },
+                    modifier = Modifier.clickable {
+                        onSortSelected(sort)
+                        onDismiss()
                     }
                 )
             }
-            IconButton(onClick = onAddGroupClick) {
-                Icon(Icons.Default.Add, contentDescription = stringResource(R.string.add_group))
-            }
-        }
-    }
-}
-
-@Composable
-private fun TvAddProfileMenu(
-    onDismiss: () -> Unit,
-    onP2PReceive: () -> Unit,
-    onAddRemote: () -> Unit,
-    onAddManual: () -> Unit
-) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(stringResource(R.string.add_profile)) },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Button(
-                    onClick = onP2PReceive,
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Icon(Icons.Default.QrCode, contentDescription = null)
-                    Spacer(Modifier.width(8.dp))
-                    Text(stringResource(R.string.p2p_receive))
-                }
-                Button(
-                    onClick = onAddRemote,
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Icon(Icons.Default.CloudDownload, contentDescription = null)
-                    Spacer(Modifier.width(8.dp))
-                    Text(stringResource(R.string.remote))
-                }
-                Button(
-                    onClick = onAddManual,
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Icon(Icons.Default.EditNote, contentDescription = null)
-                    Spacer(Modifier.width(8.dp))
-                    Text(stringResource(R.string.manual_local))
-                }
-            }
-        },
-        confirmButton = {
-            TextButton(onClick = onDismiss) {
-                Text(stringResource(android.R.string.cancel))
-            }
-        }
-    )
-}
-
-@Composable
-private fun ProfilesFab(
-    onShowMenu: () -> Unit,
-    showMenu: Boolean,
-    onDismissMenu: () -> Unit,
-    onP2PReceive: () -> Unit,
-    onAddRemote: () -> Unit,
-    onImportFile: () -> Unit,
-    onAddManual: () -> Unit
-) {
-    Box {
-        FloatingActionButton(onClick = onShowMenu) {
-            Icon(Icons.Filled.Add, contentDescription = stringResource(R.string.add_profile))
-        }
-        DropdownMenu(
-            expanded = showMenu,
-            onDismissRequest = onDismissMenu
-        ) {
-            DropdownMenuItem(
-                text = { Text(stringResource(R.string.p2p_receive)) },
-                leadingIcon = { Icon(Icons.Default.QrCode, contentDescription = null) },
-                onClick = {
-                    onDismissMenu()
-                    onP2PReceive()
-                }
-            )
-            DropdownMenuItem(
-                text = { Text(stringResource(R.string.remote)) },
-                leadingIcon = { Icon(Icons.Default.CloudDownload, contentDescription = null) },
-                onClick = {
-                    onDismissMenu()
-                    onAddRemote()
-                }
-            )
-            DropdownMenuItem(
-                text = { Text(stringResource(R.string.import_from_file)) },
-                leadingIcon = { Icon(Icons.Default.FileOpen, contentDescription = null) },
-                onClick = {
-                    onDismissMenu()
-                    onImportFile()
-                }
-            )
-            DropdownMenuItem(
-                text = { Text(stringResource(R.string.manual_local)) },
-                leadingIcon = { Icon(Icons.Default.EditNote, contentDescription = null) },
-                onClick = {
-                    onDismissMenu()
-                    onAddManual()
-                }
-            )
         }
     }
 }

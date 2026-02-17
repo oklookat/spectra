@@ -12,6 +12,7 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.withContext
 import libv2ray.Libv2ray
@@ -348,10 +349,10 @@ class ProfileRepository @Inject constructor(
         ensureEnvInitialized()
         val configJson = getProfileContent(profile) ?: return@withContext -1L
         try {
-            val delay = Libv2ray.measureOutboundDelay(configJson, url)
-            val updatedProfile = profile.copy(lastPing = delay)
+            val delayValue = Libv2ray.measureOutboundDelay(configJson, url)
+            val updatedProfile = profile.copy(lastPing = delayValue)
             dao.updateProfile(updatedProfile)
-            delay
+            delayValue
         } catch (e: Exception) {
             LogManager.addLog("[ProfileRepo] Ping failed for '${profile.name}': ${e.message}")
             val updatedProfile = profile.copy(lastPing = -1L)
@@ -362,7 +363,10 @@ class ProfileRepository @Inject constructor(
 
     suspend fun measurePings(profiles: List<Profile>, url: String = DEFAULT_PING_URL) = withContext(Dispatchers.IO) {
         profiles.map { profile ->
-            async { measurePing(profile, url) }
+            val job = async { measurePing(profile, url) }
+            // Staggered start to avoid burst of requests and resource usage
+            delay(100)
+            job
         }.awaitAll()
     }
 }

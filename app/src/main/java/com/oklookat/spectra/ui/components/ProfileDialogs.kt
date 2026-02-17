@@ -8,12 +8,14 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.oklookat.spectra.R
 import com.oklookat.spectra.model.Group
 import com.oklookat.spectra.model.Profile
+import com.oklookat.spectra.util.TvUtils
 
 @Composable
 fun GroupDialog(
@@ -31,13 +33,12 @@ fun GroupDialog(
     val isUrlValid = url.isBlank() || url.startsWith("http")
     val isIntervalValid = (interval.toIntOrNull() ?: 0) >= 15
 
+    val isTv = TvUtils.isTv(LocalContext.current)
+
     AlertDialog(
         onDismissRequest = onDismiss,
         title = {
-            Text(
-                if (group == null) stringResource(R.string.add_group)
-                else stringResource(R.string.edit_group)
-            )
+            Text(stringResource(if (group == null) R.string.add_group else R.string.edit))
         },
         text = {
             Column(
@@ -76,9 +77,10 @@ fun GroupDialog(
                             text = stringResource(R.string.auto_update),
                             style = MaterialTheme.typography.bodyLarge
                         )
-                        Switch(
+                        AppSwitch(
                             checked = autoUpdate,
-                            onCheckedChange = { autoUpdate = it }
+                            onCheckedChange = { autoUpdate = it },
+                            isTv = isTv
                         )
                     }
 
@@ -97,15 +99,16 @@ fun GroupDialog(
             }
         },
         confirmButton = {
-            Button(
+            AppButton(
                 onClick = { onConfirm(name, url.ifBlank { null }, autoUpdate, interval.toIntOrNull() ?: 60) },
-                enabled = isNameValid && isUrlValid && (!autoUpdate || isIntervalValid)
+                enabled = isNameValid && isUrlValid && (!autoUpdate || isIntervalValid),
+                isTv = isTv
             ) {
-                Text(if (group == null) stringResource(R.string.add) else stringResource(R.string.save))
+                Text(stringResource(if (group == null) R.string.add else R.string.save))
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) {
+            AppTextButton(onClick = onDismiss, isTv = isTv) {
                 Text(stringResource(R.string.cancel))
             }
         }
@@ -128,13 +131,12 @@ fun RemoteProfileDialog(
     val isUrlValid = url.isNotBlank() && url.startsWith("http")
     val isIntervalValid = (interval.toIntOrNull() ?: 0) >= 15
 
+    val isTv = TvUtils.isTv(LocalContext.current)
+
     AlertDialog(
         onDismissRequest = onDismiss,
         title = {
-            Text(
-                if (profile == null) stringResource(R.string.add_remote_profile)
-                else stringResource(R.string.edit_remote_profile)
-            )
+            Text(stringResource(if (profile == null) R.string.add_profile else R.string.edit))
         },
         text = {
             Column(
@@ -172,9 +174,10 @@ fun RemoteProfileDialog(
                         text = stringResource(R.string.auto_update),
                         style = MaterialTheme.typography.bodyLarge
                     )
-                    Switch(
+                    AppSwitch(
                         checked = autoUpdate,
-                        onCheckedChange = { autoUpdate = it }
+                        onCheckedChange = { autoUpdate = it },
+                        isTv = isTv
                     )
                 }
 
@@ -192,15 +195,16 @@ fun RemoteProfileDialog(
             }
         },
         confirmButton = {
-            Button(
+            AppButton(
                 onClick = { onConfirm(name, url, autoUpdate, interval.toIntOrNull() ?: 60) },
-                enabled = isNameValid && isUrlValid && (!autoUpdate || isIntervalValid)
+                enabled = isNameValid && isUrlValid && (!autoUpdate || isIntervalValid),
+                isTv = isTv
             ) {
-                Text(if (profile == null) stringResource(R.string.add) else stringResource(R.string.save))
+                Text(stringResource(if (profile == null) R.string.add else R.string.save))
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) {
+            AppTextButton(onClick = onDismiss, isTv = isTv) {
                 Text(stringResource(R.string.cancel))
             }
         }
@@ -225,13 +229,12 @@ fun LocalProfileDialog(
     val isNameValid = name.isNotBlank() && (profile != null || isNameUnique(name))
     val isContentValid = content.isNotBlank()
 
+    val isTv = TvUtils.isTv(LocalContext.current)
+
     AlertDialog(
         onDismissRequest = onDismiss,
         title = {
-            Text(
-                if (profile == null) stringResource(R.string.add_local_profile)
-                else stringResource(R.string.edit_local_profile)
-            )
+            Text(stringResource(if (profile == null) R.string.add_profile else R.string.edit))
         },
         text = {
             Column(
@@ -262,15 +265,16 @@ fun LocalProfileDialog(
             }
         },
         confirmButton = {
-            Button(
+            AppButton(
                 onClick = { onConfirm(name, content) },
-                enabled = isNameValid && isContentValid
+                enabled = isNameValid && isContentValid,
+                isTv = isTv
             ) {
-                Text(if (profile == null) stringResource(R.string.add) else stringResource(R.string.save))
+                Text(stringResource(if (profile == null) R.string.add else R.string.save))
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) {
+            AppTextButton(onClick = onDismiss, isTv = isTv) {
                 Text(stringResource(R.string.cancel))
             }
         }

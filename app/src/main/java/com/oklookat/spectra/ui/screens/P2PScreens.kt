@@ -15,11 +15,13 @@ import androidx.camera.view.PreviewView
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
@@ -66,7 +68,7 @@ fun P2PReceiveDialog(
                 .wrapContentHeight()
         ) {
             if (isTv) {
-                // TV Layout (Stable)
+                // TV Layout
                 Row(
                     modifier = Modifier.padding(24.dp),
                     verticalAlignment = Alignment.CenterVertically,
@@ -75,7 +77,7 @@ fun P2PReceiveDialog(
                     Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
                         Image(
                             bitmap = qrBitmap.asImageBitmap(),
-                            contentDescription = "P2P QR Code",
+                            contentDescription = null,
                             modifier = Modifier.size(350.dp)
                         )
                     }
@@ -85,7 +87,7 @@ fun P2PReceiveDialog(
                         verticalArrangement = Arrangement.spacedBy(16.dp)
                     ) {
                         Text(
-                            text = stringResource(R.string.p2p_receive_title),
+                            text = stringResource(R.string.p2p_receive),
                             style = MaterialTheme.typography.headlineLarge
                         )
                         Text(
@@ -131,7 +133,7 @@ fun P2PReceiveDialog(
                 ) {
                     Image(
                         bitmap = qrBitmap.asImageBitmap(),
-                        contentDescription = "P2P QR Code",
+                        contentDescription = null,
                         modifier = Modifier.size(180.dp)
                     )
                     Column(
@@ -139,7 +141,7 @@ fun P2PReceiveDialog(
                         verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         Text(
-                            text = stringResource(R.string.p2p_receive_title),
+                            text = stringResource(R.string.p2p_receive),
                             style = MaterialTheme.typography.titleLarge
                         )
                         Text(
@@ -182,7 +184,7 @@ fun P2PReceiveDialog(
                     verticalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
                     Text(
-                        text = stringResource(R.string.p2p_receive_title),
+                        text = stringResource(R.string.p2p_receive),
                         style = MaterialTheme.typography.headlineSmall,
                         textAlign = TextAlign.Center
                     )
@@ -193,7 +195,7 @@ fun P2PReceiveDialog(
                     )
                     Image(
                         bitmap = qrBitmap.asImageBitmap(),
-                        contentDescription = "P2P QR Code",
+                        contentDescription = null,
                         modifier = Modifier.size(260.dp)
                     )
                     Text(
@@ -265,11 +267,19 @@ fun P2PScannerDialog(
         onDismissRequest = onDismiss,
         title = { Text(stringResource(R.string.p2p_scan_title)) },
         text = {
-            Box(modifier = Modifier.size(300.dp)) {
+            Box(
+                modifier = Modifier
+                    .size(280.dp)
+                    .clip(RoundedCornerShape(12.dp))
+            ) {
                 if (hasCameraPermission) {
                     CameraPreview(onQrScanned = onQrScanned)
                 } else {
-                    Text(stringResource(R.string.p2p_camera_permission_denied), modifier = Modifier.align(Alignment.Center))
+                    Text(
+                        text = stringResource(R.string.p2p_camera_permission_denied),
+                        modifier = Modifier.align(Alignment.Center),
+                        textAlign = TextAlign.Center
+                    )
                 }
             }
         },
@@ -288,7 +298,9 @@ fun CameraPreview(onQrScanned: (url: String, token: String) -> Unit) {
 
     AndroidView(
         factory = { ctx ->
-            val previewView = PreviewView(ctx)
+            val previewView = PreviewView(ctx).apply {
+                implementationMode = PreviewView.ImplementationMode.COMPATIBLE
+            }
             val cameraProviderFuture = ProcessCameraProvider.getInstance(ctx)
 
             cameraProviderFuture.addListener({
@@ -349,14 +361,10 @@ fun P2PConfirmDialog(
 
     AlertDialog(
         onDismissRequest = onReject,
-        title = { Text(if (isReplace) stringResource(R.string.p2p_replace_title) else stringResource(R.string.p2p_accept_title)) },
+        title = { Text(stringResource(if (isReplace) R.string.replace else R.string.accept)) },
         text = { 
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(
-                    text = buildAnnotatedString {
-                        append(msgTemplate)
-                    }
-                )
+                Text(msgTemplate)
                 
                 if (isReplace) {
                     Text(
@@ -369,7 +377,7 @@ fun P2PConfirmDialog(
         },
         confirmButton = {
             Button(onClick = onAccept) { 
-                Text(if (isReplace) stringResource(R.string.replace) else stringResource(R.string.accept)) 
+                Text(stringResource(if (isReplace) R.string.replace else R.string.accept)) 
             }
         },
         dismissButton = {

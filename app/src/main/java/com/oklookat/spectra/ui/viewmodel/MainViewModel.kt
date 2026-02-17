@@ -1,6 +1,7 @@
 package com.oklookat.spectra.ui.viewmodel
 
 import android.app.Application
+import android.os.Build
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -8,7 +9,9 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.oklookat.spectra.BuildConfig
 import com.oklookat.spectra.R
+import com.oklookat.spectra.domain.usecase.profile.AddRemoteGroupUseCase
 import com.oklookat.spectra.domain.usecase.profile.AddRemoteProfileUseCase
+import com.oklookat.spectra.domain.usecase.profile.GetGroupsUseCase
 import com.oklookat.spectra.domain.usecase.profile.GetProfilesUseCase
 import com.oklookat.spectra.domain.usecase.profile.SaveGroupUseCase
 import com.oklookat.spectra.domain.usecase.profile.SaveLocalProfileUseCase
@@ -30,9 +33,11 @@ import javax.inject.Inject
 class MainViewModel @Inject constructor(
     application: Application,
     private val getProfilesUseCase: GetProfilesUseCase,
+    private val getGroupsUseCase: GetGroupsUseCase,
     private val saveGroupUseCase: SaveGroupUseCase,
     private val saveLocalProfileUseCase: SaveLocalProfileUseCase,
     private val addRemoteProfileUseCase: AddRemoteProfileUseCase,
+    private val addRemoteGroupUseCase: AddRemoteGroupUseCase,
     private val getSettingsUseCase: GetSettingsUseCase,
     private val prepareVpnConfigUseCase: PrepareVpnConfigUseCase,
     private val checkDeepLinkStatusUseCase: CheckDeepLinkStatusUseCase
@@ -62,6 +67,12 @@ class MainViewModel @Inject constructor(
         getProfilesUseCase()
             .onEach { profiles ->
                 uiState = uiState.copy(profiles = profiles)
+            }
+            .launchIn(viewModelScope)
+
+        getGroupsUseCase()
+            .onEach { groups ->
+                uiState = uiState.copy(groups = groups)
             }
             .launchIn(viewModelScope)
 
@@ -148,7 +159,12 @@ class MainViewModel @Inject constructor(
         if (p2pServer != null) return
         val server = P2PServer(onPayloadReceived = { payload ->
             viewModelScope.launch(Dispatchers.Main) {
-                val existing = if (payload.profile != null) uiState.profiles.find { it.name == payload.profile.name } else null
+                val existing = if (payload.profile != null) {
+                    uiState.profiles.find { it.name == payload.profile.name }
+                } else if (payload.group != null) {
+                    uiState.groups.find { it.name == payload.group.name }
+                } else null
+                
                 uiState = uiState.copy(
                     p2pPayloadToAccept = payload,
                     showP2PReplaceDialog = existing != null
@@ -174,36 +190,65 @@ class MainViewModel @Inject constructor(
         LogManager.addLog("[App] P2P Server stopped")
     }
 
+    fun sendP2PPayload(url: String, token: String, payload: P2PPayload) {
+        viewModelScope.launch {
+            val finalPayload = payload.copy(
+                deviceName = Build.MODEL,
+                token = token
+            )
+            val result = p2pClient.sendPayload(url, finalPayload)
+            if (result.isSuccess) {
+                _events.emit(MainUiEvent.ShowToast(messageResId = R.string.p2p_sent_success))
+            } else {
+                val error = result.exceptionOrNull()?.message ?: "Unknown error"
+                _events.emit(MainUiEvent.ShowToast(messageResId = R.string.p2p_send_failed, formatArgs = listOf(error)))
+            }
+        }
+    }
+
     fun acceptP2PPayload() {
         val payload = uiState.p2pPayloadToAccept ?: return
         viewModelScope.launch {
             try {
+                var objectName = "Object"
                 if (payload.profile != null) {
                     val p = payload.profile
-                    val existing = uiState.profiles.find { it.name == p.name }
-                    if (existing == null) {
-                        if (p.isRemote && p.url != null) {
-                            addRemoteProfileUseCase(p.name, p.url, p.autoUpdateEnabled, p.autoUpdateIntervalMinutes)
-                        } else if (payload.profileContent != null) {
-                            saveLocalProfileUseCase(p.name, payload.profileContent)
-                        }
+                    objectName = p.name
+                    if (p.isRemote && p.url != null) {
+                        addRemoteProfileUseCase(p.name, p.url, p.autoUpdateEnabled, p.autoUpdateIntervalMinutes)
+                    } else if (payload.profileContent != null) {
+                        saveLocalProfileUseCase(p.name, payload.profileContent)
                     }
                 } else if (payload.group != null) {
                     val g = payload.group
-                    val newG = g.copy(id = java.util.UUID.randomUUID().toString())
-                    saveGroupUseCase(newG)
-                    val targetGroupId = newG.id
+                    objectName = g.name
+                    val existingGroup = uiState.groups.find { it.name == g.name }
                     
-                    payload.groupProfiles?.forEach { (profile, content) ->
-                        if (profile.isRemote && profile.url != null) {
-                             addRemoteProfileUseCase(profile.name, profile.url, profile.autoUpdateEnabled, profile.autoUpdateIntervalMinutes, targetGroupId)
-                        } else if (content != null) {
-                            saveLocalProfileUseCase(profile.name, content, targetGroupId)
+                    if (g.isRemote && g.url != null) {
+                        // Remote group: just add/update group by URL
+                        addRemoteGroupUseCase(g.name, g.url, g.autoUpdateEnabled, g.autoUpdateIntervalMinutes)
+                    } else {
+                        // Local group (or bundle of profiles): 
+                        val targetGroup = if (existingGroup != null && uiState.showP2PReplaceDialog) {
+                            g.copy(id = existingGroup.id)
+                        } else {
+                            g.copy(id = java.util.UUID.randomUUID().toString())
+                        }
+                        
+                        saveGroupUseCase(targetGroup)
+                        val targetGroupId = targetGroup.id
+                        
+                        payload.groupProfiles?.forEach { (profile, content) ->
+                            if (profile.isRemote && profile.url != null) {
+                                 addRemoteProfileUseCase(profile.name, profile.url, profile.autoUpdateEnabled, profile.autoUpdateIntervalMinutes, targetGroupId)
+                            } else if (content != null) {
+                                saveLocalProfileUseCase(profile.name, content, targetGroupId)
+                            }
                         }
                     }
                 }
-                LogManager.addLog("[App] P2P payload accepted")
-                _events.emit(MainUiEvent.ShowToast(messageResId = R.string.p2p_processed, formatArgs = listOf("Profile/Group")))
+                LogManager.addLog("[App] P2P payload accepted: $objectName")
+                _events.emit(MainUiEvent.ShowToast(messageResId = R.string.p2p_processed, formatArgs = listOf(objectName)))
             } catch (e: Exception) {
                 LogManager.addLog("[App] Error accepting P2P payload: ${e.message}")
             }

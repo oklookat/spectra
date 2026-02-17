@@ -1,8 +1,8 @@
 package com.oklookat.spectra.model
 
 data class P2PPayload(
-    val deviceName: String,
-    val token: String,
+    val deviceName: String = "",
+    val token: String = "",
     
     // For single profile
     val profile: Profile? = null,

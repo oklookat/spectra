@@ -39,7 +39,7 @@ fun LogsScreen() {
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(stringResource(R.string.nav_logs)) },
+                title = { Text(stringResource(R.string.logs)) },
                 actions = {
                     IconButton(onClick = { LogManager.isPaused = !LogManager.isPaused }) {
                         Icon(

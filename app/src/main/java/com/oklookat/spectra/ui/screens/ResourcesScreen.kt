@@ -6,7 +6,9 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
@@ -15,16 +17,21 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.hilt.navigation.compose.hiltViewModel
 import com.oklookat.spectra.R
 import com.oklookat.spectra.model.Resource
+import com.oklookat.spectra.ui.components.AppButton
+import com.oklookat.spectra.ui.components.AppSwitch
+import com.oklookat.spectra.ui.components.AppTextButton
 import com.oklookat.spectra.ui.viewmodel.ResourcePresetType
 import com.oklookat.spectra.ui.viewmodel.ResourcesViewModel
-import androidx.hilt.navigation.compose.hiltViewModel
+import com.oklookat.spectra.util.TvUtils
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -292,11 +299,18 @@ fun AddResourceDialog(
     val isNameValid = name.isNotBlank() && !isNameReserved
     val isUnique = name !in existingNames || name in listOf("geoip.dat", "geosite.dat")
 
+    val isTv = TvUtils.isTv(LocalContext.current)
+
     AlertDialog(
         onDismissRequest = if (isDownloading) ({}) else onDismiss,
         title = { Text(stringResource(R.string.add_resource)) },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
                 if (isDownloading) {
                     Column(
                         horizontalAlignment = Alignment.CenterHorizontally,
@@ -312,35 +326,22 @@ fun AddResourceDialog(
                             progress = { downloadProgress },
                             modifier = Modifier.fillMaxWidth(),
                         )
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text(
-                            text = "${(downloadProgress * 100).toInt()}%",
-                            style = MaterialTheme.typography.labelSmall
-                        )
                     }
                 } else {
                     SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
                         SegmentedButton(
                             selected = selectedTabIndex == 0,
                             onClick = { selectedTabIndex = 0 },
-                            shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2),
-                            colors = SegmentedButtonDefaults.colors(
-                                inactiveContainerColor = Color.Transparent,
-                                inactiveBorderColor = MaterialTheme.colorScheme.outline
-                            )
+                            shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2)
                         ) {
-                            Text(stringResource(R.string.file_from_url))
+                            Text(stringResource(R.string.file_from_url), style = MaterialTheme.typography.labelMedium)
                         }
                         SegmentedButton(
                             selected = selectedTabIndex == 1,
                             onClick = { selectedTabIndex = 1 },
-                            shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2),
-                            colors = SegmentedButtonDefaults.colors(
-                                inactiveContainerColor = Color.Transparent,
-                                inactiveBorderColor = MaterialTheme.colorScheme.outline
-                            )
+                            shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2)
                         ) {
-                            Text(stringResource(R.string.file_from_storage))
+                            Text(stringResource(R.string.file_from_storage), style = MaterialTheme.typography.labelMedium)
                         }
                     }
 
@@ -350,10 +351,14 @@ fun AddResourceDialog(
                         label = { Text(stringResource(R.string.name)) },
                         placeholder = { Text("geoip.dat") },
                         isError = !isNameValid || !isUnique,
-                        supportingText = {
-                            if (!isUnique) Text(stringResource(R.string.unique_name_required))
-                            else if (isNameReserved) Text(stringResource(R.string.name_reserved))
-                        },
+                        supportingText = if (!isUnique || isNameReserved) {
+                            {
+                                Text(
+                                    text = if (!isUnique) stringResource(R.string.unique_name_required)
+                                    else stringResource(R.string.name_reserved)
+                                )
+                            }
+                        } else null,
                         modifier = Modifier.fillMaxWidth(),
                         singleLine = true
                     )
@@ -368,19 +373,24 @@ fun AddResourceDialog(
                             singleLine = true
                         )
                         
-                        ListItem(
-                            headlineContent = { Text(stringResource(R.string.auto_update)) },
-                            trailingContent = {
-                                Switch(checked = autoUpdate, onCheckedChange = { autoUpdate = it })
-                            },
-                            colors = ListItemDefaults.colors(containerColor = Color.Transparent),
-                            modifier = Modifier.padding(horizontal = 0.dp)
-                        )
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text(
+                                text = stringResource(R.string.auto_update),
+                                style = MaterialTheme.typography.bodyMedium
+                            )
+                            AppSwitch(checked = autoUpdate, onCheckedChange = { autoUpdate = it }, isTv = isTv)
+                        }
                         
                         if (autoUpdate) {
                             OutlinedTextField(
                                 value = interval,
-                                onValueChange = { interval = it },
+                                onValueChange = { if (it.all { char -> char.isDigit() }) interval = it },
                                 label = { Text(stringResource(R.string.interval_minutes_hourly)) },
                                 modifier = Modifier.fillMaxWidth(),
                                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
@@ -388,23 +398,23 @@ fun AddResourceDialog(
                             )
                         }
                     } else {
-                        OutlinedCard(
+                        Button(
                             onClick = { launcher.launch("*/*") },
                             modifier = Modifier.fillMaxWidth(),
-                            colors = CardDefaults.outlinedCardColors(containerColor = Color.Transparent)
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                                contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+                            )
                         ) {
-                            Row(
-                                modifier = Modifier.padding(16.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Icon(Icons.Default.UploadFile, contentDescription = null)
-                                Spacer(Modifier.width(12.dp))
-                                Text(
-                                    text = if (selectedUri == null) stringResource(R.string.import_from_file) 
-                                           else selectedUri?.lastPathSegment ?: "File selected",
-                                    style = MaterialTheme.typography.bodyMedium
-                                )
-                            }
+                            Icon(Icons.Default.UploadFile, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(Modifier.width(8.dp))
+                            Text(
+                                text = if (selectedUri == null) stringResource(R.string.import_from_file) 
+                                       else selectedUri?.lastPathSegment ?: "File selected",
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                style = MaterialTheme.typography.labelLarge
+                            )
                         }
                     }
                 }
@@ -412,19 +422,20 @@ fun AddResourceDialog(
         },
         confirmButton = {
             if (!isDownloading) {
-                Button(
+                AppButton(
                     onClick = {
                         if (selectedTabIndex == 0) onAddRemote(name, url, autoUpdate, interval.toIntOrNull() ?: 1)
                         else selectedUri?.let { onAddLocal(name, it) }
                     },
-                    enabled = isNameValid && isUnique && (if (selectedTabIndex == 0) url.isNotBlank() else selectedUri != null)
+                    enabled = isNameValid && isUnique && (if (selectedTabIndex == 0) url.isNotBlank() else selectedUri != null),
+                    isTv = isTv
                 ) {
                     Text(stringResource(R.string.add))
                 }
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) { 
+            AppTextButton(onClick = onDismiss, isTv = isTv) { 
                 Text(stringResource(R.string.cancel)) 
             }
         }
