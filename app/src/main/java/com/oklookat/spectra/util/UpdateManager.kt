@@ -19,16 +19,40 @@ class UpdateManager(private val context: Context) {
     private val client = OkHttpClient()
     private val gson = Gson()
 
+    private val apkFile get() = File(context.externalCacheDir, "update.apk")
+    private val etagFile get() = File(context.externalCacheDir, "update.etag")
+
+    // --- Cache helpers ---
+
+    private fun readCachedEtag(): String? =
+        etagFile.takeIf { it.exists() }?.readText()?.trim()
+
+    private fun writeCachedEtag(etag: String) =
+        etagFile.writeText(etag)
+
+    private fun readApkVersionCode(): Long? {
+        if (!apkFile.exists()) return null
+        val info = context.packageManager.getPackageArchiveInfo(apkFile.path, 0)
+        return info?.longVersionCode
+    }
+
+    private fun clearCache() {
+        apkFile.takeIf { it.exists() }?.delete()
+        etagFile.takeIf { it.exists() }?.delete()
+        LogManager.addLog("[Update] Cache cleared")
+    }
+
+    // --- Update check ---
+
     suspend fun checkForUpdates(updateUrl: String): AppUpdate? = withContext(Dispatchers.IO) {
         if (updateUrl.isBlank()) {
             LogManager.addLog("[Update] Check skipped: update URL is blank")
             return@withContext null
         }
 
-        val deviceAbis = Build.SUPPORTED_ABIS.joinToString(", ")
-        LogManager.addLog("[Update] Device ABIs: $deviceAbis")
+        LogManager.addLog("[Update] Device ABIs: ${Build.SUPPORTED_ABIS.joinToString(", ")}")
         LogManager.addLog("[Update] Checking for updates at $updateUrl")
-        
+
         val request = try {
             Request.Builder().url(updateUrl).build()
         } catch (e: IllegalArgumentException) {
@@ -48,65 +72,100 @@ class UpdateManager(private val context: Context) {
                     LogManager.addLog("[Update] Check failed: $errorMsg")
                     return@withContext null
                 }
-                
+
                 val body = response.body?.string() ?: run {
                     LogManager.addLog("[Update] Check failed: empty response body")
                     return@withContext null
                 }
-                
+
                 val update = try {
                     gson.fromJson(body, AppUpdate::class.java)
                 } catch (e: Exception) {
                     LogManager.addLog("[Update] Failed to parse update JSON: ${e.localizedMessage ?: "Invalid format"}")
                     return@withContext null
                 }
-                
-                if (update.versionCode > BuildConfig.VERSION_CODE) {
-                    LogManager.addLog("[Update] New version available: ${update.versionName} (${update.versionCode})")
-                    update
-                } else {
+
+                if (update.versionCode <= BuildConfig.VERSION_CODE) {
+                    // Already on latest version — wipe cache if it exists
                     LogManager.addLog("[Update] App is up to date (current: ${BuildConfig.VERSION_NAME})")
-                    null
+                    clearCache()
+                    return@withContext null
                 }
+
+                // New version available — check if cached APK is still useful
+                val cachedApkVersion = readApkVersionCode()
+                if (cachedApkVersion != null && cachedApkVersion < BuildConfig.VERSION_CODE) {
+                    // Cached APK is older than currently installed app — useless, drop it
+                    LogManager.addLog("[Update] Cached APK (versionCode=$cachedApkVersion) is older than installed app, clearing cache")
+                    clearCache()
+                }
+
+                LogManager.addLog("[Update] New version available: ${update.versionName} (${update.versionCode})")
+                update
             }
         } catch (e: UnknownHostException) {
-            LogManager.addLog("[Update] Error: Host not found. Check your internet connection or URL.")
+            LogManager.addLog("[Update] Error: Host not found. Check internet connection or URL.")
             null
         } catch (e: Exception) {
-            val detail = e.localizedMessage ?: e.javaClass.simpleName
-            LogManager.addLog("[Update] Error checking for updates: $detail")
+            LogManager.addLog("[Update] Error checking for updates: ${e.localizedMessage ?: e.javaClass.simpleName}")
             null
         }
     }
 
+    // --- Download & install ---
+
     suspend fun downloadAndInstallApk(update: AppUpdate, onProgress: (Float) -> Unit = {}): Boolean = withContext(Dispatchers.IO) {
         val apkUrl = getBestApkUrl(update) ?: run {
-            LogManager.addLog("[Update] No compatible APK found for device architecture: ${Build.SUPPORTED_ABIS.joinToString()}")
+            LogManager.addLog("[Update] No compatible APK found for device ABIs: ${Build.SUPPORTED_ABIS.joinToString()}")
             return@withContext false
         }
 
-        LogManager.addLog("[Update] Starting download: $apkUrl")
         val request = try {
-            Request.Builder().url(apkUrl).build()
+            Request.Builder()
+                .url(apkUrl)
+                .apply {
+                    // If we have a cached APK with a matching versionCode, send its ETag.
+                    // The server will return 304 Not Modified if the file hasn't changed,
+                    // saving a full re-download.
+                    val cachedEtag = readCachedEtag()
+                    val cachedApkVersion = readApkVersionCode()
+                    if (cachedEtag != null && cachedApkVersion == update.versionCode.toLong()) {
+                        header("If-None-Match", cachedEtag)
+                        LogManager.addLog("[Update] Sending If-None-Match: $cachedEtag")
+                    }
+                }
+                .build()
         } catch (e: IllegalArgumentException) {
             LogManager.addLog("[Update] Invalid APK URL: $apkUrl")
             return@withContext false
         }
 
+        LogManager.addLog("[Update] Starting download: $apkUrl")
+
         try {
             client.newCall(request).execute().use { response ->
-                if (!response.isSuccessful) {
-                    LogManager.addLog("[Update] Download failed: HTTP ${response.code}")
-                    return@withContext false
+                when {
+                    response.code == 304 -> {
+                        // Server confirmed our cached APK is still current — install it directly
+                        LogManager.addLog("[Update] Server returned 304 Not Modified — using cached APK")
+                        withContext(Dispatchers.Main) { installApk(apkFile) }
+                        return@withContext true
+                    }
+
+                    !response.isSuccessful -> {
+                        LogManager.addLog("[Update] Download failed: HTTP ${response.code}")
+                        return@withContext false
+                    }
                 }
+
                 val body = response.body ?: run {
-                    LogManager.addLog("[Update] Download failed: empty response")
+                    LogManager.addLog("[Update] Download failed: empty response body")
                     return@withContext false
                 }
-                
+
                 val totalBytes = body.contentLength()
-                val apkFile = File(context.externalCacheDir, "update.apk")
-                
+
+                // Stream APK to disk
                 body.byteStream().use { input ->
                     FileOutputStream(apkFile).use { output ->
                         val buffer = ByteArray(8192)
@@ -117,25 +176,41 @@ class UpdateManager(private val context: Context) {
                             downloadedBytes += bytesRead
                             if (totalBytes > 0) {
                                 val progress = downloadedBytes.toFloat() / totalBytes
-                                withContext(Dispatchers.Main) {
-                                    onProgress(progress)
-                                }
+                                withContext(Dispatchers.Main) { onProgress(progress) }
                             }
                         }
                     }
                 }
-                LogManager.addLog("[Update] Download complete, launching installer")
-                withContext(Dispatchers.Main) {
-                    installApk(apkFile)
+
+                // Verify the downloaded APK reports the expected versionCode
+                val downloadedVersion = readApkVersionCode()
+                if (downloadedVersion != update.versionCode.toLong()) {
+                    LogManager.addLog("[Update] APK versionCode mismatch: expected ${update.versionCode}, got $downloadedVersion — aborting")
+                    clearCache()
+                    return@withContext false
                 }
+
+                // Save ETag for future requests (skip caching if server didn't provide one)
+                val newEtag = response.header("ETag")
+                if (newEtag != null) {
+                    writeCachedEtag(newEtag)
+                    LogManager.addLog("[Update] ETag cached: $newEtag")
+                } else {
+                    etagFile.takeIf { it.exists() }?.delete()
+                    LogManager.addLog("[Update] Server did not provide ETag — skipping ETag cache")
+                }
+
+                LogManager.addLog("[Update] Download complete (versionCode=$downloadedVersion), launching installer")
+                withContext(Dispatchers.Main) { installApk(apkFile) }
                 return@withContext true
             }
         } catch (e: Exception) {
-            val detail = e.localizedMessage ?: e.javaClass.simpleName
-            LogManager.addLog("[Update] Error during download/install: $detail")
+            LogManager.addLog("[Update] Error during download/install: ${e.localizedMessage ?: e.javaClass.simpleName}")
             false
         }
     }
+
+    // --- Helpers ---
 
     private fun getBestApkUrl(update: AppUpdate): String? {
         update.apkUrls?.let { urls ->
@@ -146,8 +221,7 @@ class UpdateManager(private val context: Context) {
                 }
             }
         }
-        
-        // Fallback to the single apkUrl field if map search failed or is empty
+        // Fall back to the universal APK URL if no ABI-specific one matched
         return update.apkUrl
     }
 
