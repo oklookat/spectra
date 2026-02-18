@@ -22,7 +22,7 @@ android {
         versionCode = versionMajor * 10000 + versionMinor * 100 + versionPatch
         versionName = "$versionMajor.$versionMinor.$versionPatch"
 
-        val updateUrl = ""
+        val updateUrl: String = project.findProperty("UPDATE_URL") as? String ?: ""
         buildConfigField("String", "UPDATE_URL", "\"$updateUrl\"")
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
