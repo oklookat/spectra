@@ -1,3 +1,10 @@
+import java.util.Properties
+
+val secrets = rootProject.extra["secrets"] as Properties
+val updateUrl: String = secrets.getProperty("UPDATE_URL", "")
+
+//println("UPDATE_URL=$updateUrl")
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
@@ -22,7 +29,6 @@ android {
         versionCode = versionMajor * 10000 + versionMinor * 100 + versionPatch
         versionName = "$versionMajor.$versionMinor.$versionPatch"
 
-        val updateUrl: String = project.findProperty("UPDATE_URL") as? String ?: ""
         buildConfigField("String", "UPDATE_URL", "\"$updateUrl\"")
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
@@ -82,7 +88,7 @@ dependencies {
     implementation(libs.okhttp)
     implementation(libs.gson)
     
-    implementation("androidx.compose.material:material-icons-extended")
+    implementation(libs.androidx.compose.material.icons.extended)
 
     implementation(libs.androidx.tv.foundation)
     implementation(libs.androidx.tv.material)
