@@ -67,6 +67,22 @@ android {
     kotlinOptions {
         jvmTarget = "11"
     }
+
+    applicationVariants.configureEach {
+        outputs.configureEach {
+            val output = this as? com.android.build.gradle.internal.api.ApkVariantOutputImpl
+                ?: return@configureEach
+
+            val abiFilter = output.filters
+                .find { it.filterType == com.android.build.OutputFile.ABI }
+                ?.identifier
+                ?: "universal"
+
+            val appName = "Spectra"
+
+            output.outputFileName = "${appName}-${abiFilter}.apk"
+        }
+    }
 }
 
 hilt {
