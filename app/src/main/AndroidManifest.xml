@@ -23,6 +23,7 @@
 
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" tools:ignore="QueryAllPackagesPermission" />
 
     <application
         android:name=".SpectraApplication"
@@ -68,14 +69,23 @@
                 <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
             </intent-filter>
 
-            <!-- App Link (HTTPS) -->
+            <!-- App Link (HTTPS, HTTP) -->
             <intent-filter android:autoVerify="true">
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="https" />
+                <data android:scheme="http" />
                 <data android:host="spectra.local" />
-                <data android:pathPrefix="/import" />
+            </intent-filter>
+
+            <!-- Custom Scheme (SPECTRA) -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="spectra" />
+                <data android:host="spectra.local" />
             </intent-filter>
         </activity>
 

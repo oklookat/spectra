@@ -15,8 +15,14 @@ import java.net.UnknownHostException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
+import java.util.concurrent.TimeUnit
+
 class UpdateManager(private val context: Context) {
-    private val client = OkHttpClient()
+    private val client = OkHttpClient.Builder()
+        .connectTimeout(15, TimeUnit.SECONDS)
+        .readTimeout(15, TimeUnit.SECONDS)
+        .writeTimeout(15, TimeUnit.SECONDS)
+        .build()
     private val gson = Gson()
 
     private val apkFile get() = File(context.externalCacheDir, "update.apk")

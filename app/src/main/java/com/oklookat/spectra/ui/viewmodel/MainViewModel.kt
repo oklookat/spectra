@@ -29,6 +29,9 @@ import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
+import com.oklookat.spectra.data.repository.AppFilterRepository
+import kotlinx.coroutines.flow.first
+
 @HiltViewModel
 class MainViewModel @Inject constructor(
     application: Application,
@@ -40,7 +43,8 @@ class MainViewModel @Inject constructor(
     private val addRemoteGroupUseCase: AddRemoteGroupUseCase,
     private val getSettingsUseCase: GetSettingsUseCase,
     private val prepareVpnConfigUseCase: PrepareVpnConfigUseCase,
-    private val checkDeepLinkStatusUseCase: CheckDeepLinkStatusUseCase
+    private val checkDeepLinkStatusUseCase: CheckDeepLinkStatusUseCase,
+    private val appFilterRepository: AppFilterRepository
 ) : AndroidViewModel(application) {
     private val updateManager = UpdateManager(application)
     private val p2pClient = P2PClient()
@@ -134,6 +138,12 @@ class MainViewModel @Inject constructor(
     } catch (e: Exception) {
         LogManager.addLog("[App] Failed to prepare VPN config: ${e.message}")
         ""
+    }
+
+    suspend fun getDisallowedPackages(): Set<String> = try {
+        appFilterRepository.activeDisallowedPackagesFlow.first()
+    } catch (_: Exception) {
+        emptySet()
     }
 
     fun checkDeepLinkStatus() {

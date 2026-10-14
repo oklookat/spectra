@@ -154,4 +154,26 @@
     <string name="update_now">Обновить</string>
     <string name="downloading_update">Загрузка обновления…</string>
     <string name="update_failed_msg">Не удалось загрузить обновление.</string>
+
+    <!-- Исключения приложений / Сплит-туннелирование -->
+    <string name="app_filter">Исключения приложений</string>
+    <string name="app_filter_desc">Выберите приложения, которые обходят или идут через VPN</string>
+    <string name="reset_to_all_vpn">Сброшено: все приложения через VPN</string>
+    <string name="preset_created">Пресет \'%1$s\' создан</string>
+    <string name="preset_updated">Пресет обновлен</string>
+    <string name="preset_deleted">Пресет удален</string>
+    <string name="ru_rules_applied">Найдено %1$s российских приложений</string>
+    <string name="invert_selection">Инвертировать</string>
+    <string name="select_all">Выбрать все</string>
+    <string name="deselect_all">Снять все</string>
+    <string name="show_system_apps">Показывать системные приложения</string>
+    <string name="search_apps">Поиск приложений…</string>
+    <string name="new_preset">Новый пресет</string>
+    <string name="preset_name">Название пресета</string>
+    <string name="edit_preset">Редактировать пресет</string>
+    <string name="delete_preset_q">Удалить пресет \'%1$s\'?</string>
+    <string name="update_ru_rules">Обновить список росс. приложений</string>
+    <string name="updating_ru_rules">Загрузка и поиск росс. приложений…</string>
+    <string name="all_apps_through_vpn">Все приложения через VPN</string>
+    <string name="bypass_selected">Обход VPN для выбранных приложений (%1$d)</string>
 </resources>

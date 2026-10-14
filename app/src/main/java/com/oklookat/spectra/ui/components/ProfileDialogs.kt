@@ -15,7 +15,19 @@ import androidx.compose.ui.unit.dp
 import com.oklookat.spectra.R
 import com.oklookat.spectra.model.Group
 import com.oklookat.spectra.model.Profile
+import com.oklookat.spectra.util.DeepLinkHandler
 import com.oklookat.spectra.util.TvUtils
+
+private fun isValidInputUrl(url: String): Boolean {
+    val trimmed = url.trim().lowercase()
+    return trimmed.startsWith("http://") ||
+            trimmed.startsWith("https://") ||
+            trimmed.startsWith("spectra://") ||
+            trimmed.startsWith("vless://") ||
+            trimmed.startsWith("vmess://") ||
+            trimmed.startsWith("trojan://") ||
+            trimmed.startsWith("ss://")
+}
 
 @Composable
 fun GroupDialog(
@@ -29,8 +41,31 @@ fun GroupDialog(
     var autoUpdate by remember { mutableStateOf(group?.autoUpdateEnabled ?: false) }
     var interval by remember { mutableStateOf(group?.autoUpdateIntervalMinutes?.toString() ?: "60") }
 
+    fun handleUrlChange(inputUrl: String) {
+        if (inputUrl.contains("spectra.local")) {
+            when (val result = DeepLinkHandler.handleUrlString(inputUrl)) {
+                is DeepLinkHandler.DeepLinkResult.Group -> {
+                    if (name.isBlank()) name = result.pending.name
+                    url = result.pending.url
+                    autoUpdate = result.pending.autoUpdate
+                    interval = result.pending.interval.toString()
+                    return
+                }
+                is DeepLinkHandler.DeepLinkResult.Profile -> {
+                    if (name.isBlank()) name = result.pending.name
+                    url = result.pending.url
+                    autoUpdate = result.pending.autoUpdate
+                    interval = result.pending.interval.toString()
+                    return
+                }
+                else -> {}
+            }
+        }
+        url = inputUrl
+    }
+
     val isNameValid = name.isNotBlank() && (group != null || isNameUnique(name))
-    val isUrlValid = url.isBlank() || url.startsWith("http")
+    val isUrlValid = url.isBlank() || isValidInputUrl(url)
     val isIntervalValid = (interval.toIntOrNull() ?: 0) >= 15
 
     val isTv = TvUtils.isTv(LocalContext.current)
@@ -58,7 +93,7 @@ fun GroupDialog(
 
                 OutlinedTextField(
                     value = url,
-                    onValueChange = { url = it },
+                    onValueChange = { handleUrlChange(it) },
                     label = { Text(stringResource(R.string.url_optional_remote)) },
                     isError = !isUrlValid && url.isNotEmpty(),
                     singleLine = true,
@@ -127,8 +162,31 @@ fun RemoteProfileDialog(
     var autoUpdate by remember { mutableStateOf(profile?.autoUpdateEnabled ?: false) }
     var interval by remember { mutableStateOf(profile?.autoUpdateIntervalMinutes?.toString() ?: "60") }
 
+    fun handleUrlChange(inputUrl: String) {
+        if (inputUrl.contains("spectra.local")) {
+            when (val result = DeepLinkHandler.handleUrlString(inputUrl)) {
+                is DeepLinkHandler.DeepLinkResult.Profile -> {
+                    if (name.isBlank()) name = result.pending.name
+                    url = result.pending.url
+                    autoUpdate = result.pending.autoUpdate
+                    interval = result.pending.interval.toString()
+                    return
+                }
+                is DeepLinkHandler.DeepLinkResult.Group -> {
+                    if (name.isBlank()) name = result.pending.name
+                    url = result.pending.url
+                    autoUpdate = result.pending.autoUpdate
+                    interval = result.pending.interval.toString()
+                    return
+                }
+                else -> {}
+            }
+        }
+        url = inputUrl
+    }
+
     val isNameValid = name.isNotBlank() && (profile != null || isNameUnique(name))
-    val isUrlValid = url.isNotBlank() && url.startsWith("http")
+    val isUrlValid = url.isNotBlank() && isValidInputUrl(url)
     val isIntervalValid = (interval.toIntOrNull() ?: 0) >= 15
 
     val isTv = TvUtils.isTv(LocalContext.current)
@@ -156,7 +214,7 @@ fun RemoteProfileDialog(
 
                 OutlinedTextField(
                     value = url,
-                    onValueChange = { url = it },
+                    onValueChange = { handleUrlChange(it) },
                     label = { Text(stringResource(R.string.url)) },
                     isError = !isUrlValid && url.isNotEmpty(),
                     singleLine = true,

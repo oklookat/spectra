@@ -23,6 +23,7 @@ import java.io.FileOutputStream
 import java.nio.charset.Charset
 import java.security.SecureRandom
 import java.util.UUID
+import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -32,7 +33,11 @@ class ProfileRepository @Inject constructor(
     private val dao: ProfileDao
 ) {
     private val sharedPreferences = context.getSharedPreferences("profiles_prefs", Context.MODE_PRIVATE)
-    private val client = OkHttpClient()
+    private val client = OkHttpClient.Builder()
+        .connectTimeout(15, TimeUnit.SECONDS)
+        .readTimeout(15, TimeUnit.SECONDS)
+        .writeTimeout(15, TimeUnit.SECONDS)
+        .build()
 
     private val profilesDir = File(context.filesDir, "profiles").apply {
         if (!exists()) mkdirs()

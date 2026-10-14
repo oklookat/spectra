@@ -28,7 +28,8 @@ fun SettingsScreen(
     isTv: Boolean,
     onToggleIpv6: (Boolean) -> Unit,
     onUpdateTunnel: (String, String, String, String, Int) -> Unit,
-    onOpenResources: () -> Unit
+    onOpenResources: () -> Unit,
+    onOpenAppFilter: () -> Unit
 ) {
     Scaffold(
         topBar = {
@@ -43,7 +44,24 @@ fun SettingsScreen(
                 .padding(padding)
                 .verticalScroll(rememberScrollState())
         ) {
-            // 1. Resources
+            // 1. App Filter / Split Tunneling
+            SettingsSectionTitle(stringResource(R.string.app_filter))
+            AppListItem(
+                headlineContent = { Text(stringResource(R.string.app_filter)) },
+                supportingContent = { Text(stringResource(R.string.app_filter_desc)) },
+                leadingContent = { Icon(Icons.Default.Apps, contentDescription = null) },
+                trailingContent = {
+                    Button(onClick = onOpenAppFilter) {
+                        Text(stringResource(R.string.configure))
+                    }
+                },
+                onClick = onOpenAppFilter,
+                isTv = isTv
+            )
+
+            HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp))
+
+            // 2. Resources
             SettingsSectionTitle(stringResource(R.string.resources))
             AppListItem(
                 headlineContent = { Text(stringResource(R.string.resources)) },

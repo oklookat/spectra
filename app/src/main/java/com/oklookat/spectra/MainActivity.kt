@@ -168,6 +168,7 @@ class MainActivity : ComponentActivity() {
             val config = viewModel.prepareVpnConfig()
             val uiState = viewModel.uiState
             val settings = uiState.settings
+            val disallowedPackages = viewModel.getDisallowedPackages()
 
             if (config.isEmpty()) {
                 Toast.makeText(this@MainActivity, getString(R.string.no_profiles_yet), Toast.LENGTH_LONG).show()
@@ -183,17 +184,20 @@ class MainActivity : ComponentActivity() {
                 vpnDns = settings.vpnDns,
                 vpnAddressIpv6 = settings.vpnAddressIpv6,
                 vpnDnsIpv6 = settings.vpnDnsIpv6,
-                vpnMtu = settings.vpnMtu
+                vpnMtu = settings.vpnMtu,
+                disallowedPackages = ArrayList(disallowedPackages)
             )
             
             val bindIntent = Intent(this@MainActivity, XrayVpnService::class.java)
-            bindService(bindIntent, connection, BIND_AUTO_CREATE)
+            if (bindService(bindIntent, connection, BIND_AUTO_CREATE)) {
+                isBound = true
+            }
         }
     }
 
     private fun stopVpnService() {
         if (isBound) {
-            unbindService(connection)
+            try { unbindService(connection) } catch (_: Exception) {}
             isBound = false
         }
         val intent = Intent(this, XrayVpnService::class.java).apply {
@@ -204,7 +208,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onDestroy() {
         if (isBound) {
-            unbindService(connection)
+            try { unbindService(connection) } catch (_: Exception) {}
             isBound = false
         }
         super.onDestroy()

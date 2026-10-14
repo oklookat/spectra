@@ -19,12 +19,14 @@ val versionPatch = 0
 
 android {
     namespace = "com.oklookat.spectra"
-    compileSdk = 36
+    compileSdk {
+        version = release(37)
+    }
 
     defaultConfig {
         applicationId = "com.oklookat.spectra"
-        minSdk = 29
-        targetSdk = 36
+        minSdk = 33
+        targetSdk = 37
         
         versionCode = versionMajor * 10000 + versionMinor * 100 + versionPatch
         versionName = "$versionMajor.$versionMinor.$versionPatch"
@@ -61,11 +63,8 @@ android {
     }
 
     compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_11
-        targetCompatibility = JavaVersion.VERSION_11
-    }
-    kotlinOptions {
-        jvmTarget = "11"
+        sourceCompatibility = JavaVersion.VERSION_21
+        targetCompatibility = JavaVersion.VERSION_21
     }
 
     applicationVariants.configureEach {
@@ -139,4 +138,10 @@ dependencies {
 
     implementation(files("libs/libv2ray.aar"))
     implementation(libs.nanohttpd.webserver)
+}
+
+kotlin {
+    compilerOptions {
+        jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_21)
+    }
 }

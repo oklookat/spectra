@@ -14,11 +14,11 @@ The project is unstable, so it may change drastically over time.
 
 Main sources of inspiration: [sing-box-for-android](https://github.com/SagerNet/sing-box-for-android), [v2rayNG](https://github.com/2dust/v2rayNG).
 
-## What's broken
+## Status & Fixes
 
-- Subscription system (vless:// and so on). They are imported, but a proper parser and config editor need to be written.
+- **Share Links / Subscription Support (vless://, vmess://, trojan://, ss://)**: Fixed and verified! Share links now convert into fully compliant Xray-core outbound JSON configurations (including gRPC, WebSocket, REALITY, TLS, and Shadowsocks UOT).
 
-- Full Xray config works fine for now. Config example:
+- **Full Xray config**: Fully supported. Config example:
 
 ```json
 {

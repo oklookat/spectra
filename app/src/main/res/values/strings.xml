@@ -156,4 +156,26 @@
     <string name="update_now">Update Now</string>
     <string name="downloading_update">Downloading update…</string>
     <string name="update_failed_msg">Failed to download update.</string>
+
+    <!-- App Split Tunneling / App Filter -->
+    <string name="app_filter">App Exclusions</string>
+    <string name="app_filter_desc">Select applications that bypass or go through VPN</string>
+    <string name="reset_to_all_vpn">Reset: All apps through VPN</string>
+    <string name="preset_created">Preset \'%1$s\' created</string>
+    <string name="preset_updated">Preset updated</string>
+    <string name="preset_deleted">Preset deleted</string>
+    <string name="ru_rules_applied">Matched %1$s Russian applications</string>
+    <string name="invert_selection">Invert</string>
+    <string name="select_all">Select All</string>
+    <string name="deselect_all">Deselect All</string>
+    <string name="show_system_apps">Show system apps</string>
+    <string name="search_apps">Search applications…</string>
+    <string name="new_preset">New Preset</string>
+    <string name="preset_name">Preset Name</string>
+    <string name="edit_preset">Edit Preset</string>
+    <string name="delete_preset_q">Delete preset \'%1$s\'?</string>
+    <string name="update_ru_rules">Update Russian apps list</string>
+    <string name="updating_ru_rules">Downloading and matching Russian apps list…</string>
+    <string name="all_apps_through_vpn">All apps through VPN</string>
+    <string name="bypass_selected">Bypass VPN for selected apps (%1$d)</string>
 </resources>

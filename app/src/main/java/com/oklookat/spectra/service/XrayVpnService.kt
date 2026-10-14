@@ -31,10 +31,8 @@ import kotlinx.coroutines.withContext
 import libv2ray.CoreCallbackHandler
 import libv2ray.CoreController
 import libv2ray.Libv2ray
-import java.io.BufferedReader
 import java.io.File
 import java.io.FileOutputStream
-import java.io.InputStreamReader
 import java.security.SecureRandom
 import java.util.concurrent.locks.ReentrantLock
 import kotlin.concurrent.thread
@@ -74,7 +72,8 @@ class XrayVpnService : VpnService() {
             vpnDns: String,
             vpnAddressIpv6: String,
             vpnDnsIpv6: String,
-            vpnMtu: Int
+            vpnMtu: Int,
+            disallowedPackages: ArrayList<String> = arrayListOf()
         ) {
             val intent = Intent(context, XrayVpnService::class.java).apply {
                 putExtra("CONFIG_JSON", configJson)
@@ -85,6 +84,7 @@ class XrayVpnService : VpnService() {
                 putExtra("VPN_ADDRESS_IPV6", vpnAddressIpv6)
                 putExtra("VPN_DNS_IPV6", vpnDnsIpv6)
                 putExtra("VPN_MTU", vpnMtu)
+                putStringArrayListExtra("DISALLOWED_PACKAGES", disallowedPackages)
             }
             ContextCompat.startForegroundService(context, intent)
         }
@@ -128,13 +128,34 @@ class XrayVpnService : VpnService() {
             return START_NOT_STICKY
         }
 
+        val notification = buildNotification()
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            ServiceCompat.startForeground(
+                this,
+                NOTIFICATION_ID,
+                notification,
+                ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE
+            )
+        } else {
+            startForeground(NOTIFICATION_ID, notification)
+        }
+
         val configJson = intent?.getStringExtra("CONFIG_JSON") ?: ""
         val profileId = intent?.getStringExtra("PROFILE_ID")
 
         serviceScope.launch {
-            val config = configJson.ifEmpty {
+            withContext(Dispatchers.IO) {
+                copyAssetsToFilesDir()
+                try {
+                    val key = generateRandom32ByteKey()
+                    Libv2ray.initCoreEnv(filesDir.absolutePath, key)
+                } catch (_: Exception) {}
+            }
+
+            val rawConfig = configJson.ifEmpty {
                 withContext(Dispatchers.IO) { loadConfigFromAssets() }
             }
+            val config = com.oklookat.spectra.model.XrayConfigBuild.prepareConfigForAndroid(rawConfig)
 
             if (config.isEmpty()) {
                 Log.e(TAG, "No config found, stopping service")
@@ -149,7 +170,8 @@ class XrayVpnService : VpnService() {
                 vpnDns = intent?.getStringExtra("VPN_DNS") ?: "10.0.0.2",
                 vpnAddressIpv6 = intent?.getStringExtra("VPN_ADDRESS_IPV6") ?: "fd00::1",
                 vpnDnsIpv6 = intent?.getStringExtra("VPN_DNS_IPV6") ?: "fd00::2",
-                vpnMtu = intent?.getIntExtra("VPN_MTU", 9000) ?: 9000
+                vpnMtu = intent?.getIntExtra("VPN_MTU", 9000) ?: 9000,
+                disallowedPackages = intent?.getStringArrayListExtra("DISALLOWED_PACKAGES") ?: emptyList()
             )
 
             withContext(Dispatchers.IO) {
@@ -169,7 +191,8 @@ class XrayVpnService : VpnService() {
         val vpnDns: String,
         val vpnAddressIpv6: String,
         val vpnDnsIpv6: String,
-        val vpnMtu: Int
+        val vpnMtu: Int,
+        val disallowedPackages: List<String>
     )
 
     private fun startVpnLocked(configJson: String, params: VpnParams) {
@@ -190,6 +213,16 @@ class XrayVpnService : VpnService() {
                 .setSession("Spectra Xray")
                 .addDisallowedApplication(packageName)
 
+            for (pkg in params.disallowedPackages) {
+                if (pkg != packageName && pkg.isNotBlank()) {
+                    try {
+                        builder.addDisallowedApplication(pkg)
+                    } catch (e: Exception) {
+                        Log.w(TAG, "Package $pkg not found or failed to disallow: ${e.message}")
+                    }
+                }
+            }
+
             if (params.enableIpv6) {
                 builder.addAddress(params.vpnAddressIpv6, 128)
                 builder.addRoute("::", 0)
@@ -206,19 +239,15 @@ class XrayVpnService : VpnService() {
                 return
             }
 
-            val notification = buildNotification()
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-                ServiceCompat.startForeground(
-                    this,
-                    NOTIFICATION_ID,
-                    notification,
-                    ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE
-                )
-            } else {
-                startForeground(NOTIFICATION_ID, notification)
+            val fd = pfd.fd
+            try {
+                android.system.Os.setenv("xray.tun.fd", fd.toString(), true)
+                android.system.Os.setenv("XRAY_TUN_FD", fd.toString(), true)
+                Log.d(TAG, "Successfully set xray.tun.fd=$fd and XRAY_TUN_FD=$fd")
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to set TUN FD environment variable", e)
             }
 
-            val fd = pfd.fd
             val callback = object : CoreCallbackHandler {
                 override fun onEmitStatus(p0: Long, p1: String?): Long {
                     if (!p1.isNullOrBlank()) {
@@ -262,20 +291,24 @@ class XrayVpnService : VpnService() {
     private fun startLogcatCapture() {
         thread(start = true, name = "LogcatThread") {
             try {
-                Runtime.getRuntime().exec("logcat -c").waitFor()
+                try {
+                    val clearProcess = Runtime.getRuntime().exec("logcat -c")
+                    clearProcess.waitFor()
+                } catch (_: Exception) {}
+
                 val process = Runtime.getRuntime().exec("logcat GoLog:I *:S")
                 logcatProcess = process
-                val reader = BufferedReader(InputStreamReader(process.inputStream))
-                while (true) {
-                    val line = reader.readLine() ?: break
-                    val message = line.substringAfter("GoLog   : ").trim()
-                    if (message.isNotEmpty() && message != line) {
-                        LogManager.addLog(message)
+                process.inputStream.bufferedReader().use { reader ->
+                    while (true) {
+                        val line = reader.readLine() ?: break
+                        val message = line.substringAfter("GoLog   : ").trim()
+                        if (message.isNotEmpty() && message != line) {
+                            LogManager.addLog(message)
+                        }
                     }
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Logcat capture error", e)
-                LogManager.addLog("[Service] Internal logcat capture error")
             } finally {
                 logcatProcess?.destroy()
                 logcatProcess = null

@@ -191,13 +191,21 @@ private fun AppNavigation(
                 onUpdateTunnel = { addr, dns, addr6, dns6, mtu ->
                     settingsViewModel.updateTunnelSettings(addr, dns, addr6, dns6, mtu)
                 },
-                onOpenResources = { navController.navigate(Screen.Resources.route) }
+                onOpenResources = { navController.navigate(Screen.Resources.route) },
+                onOpenAppFilter = { navController.navigate(Screen.AppFilter.route) }
             )
         }
         composable(Screen.Resources.route) {
             val resourcesViewModel: ResourcesViewModel = hiltViewModel()
             ResourcesScreen(
                 viewModel = resourcesViewModel,
+                onBack = { navController.popBackStack() }
+            )
+        }
+        composable(Screen.AppFilter.route) {
+            val appFilterViewModel: AppFilterViewModel = hiltViewModel()
+            AppFilterScreen(
+                viewModel = appFilterViewModel,
                 onBack = { navController.popBackStack() }
             )
         }
