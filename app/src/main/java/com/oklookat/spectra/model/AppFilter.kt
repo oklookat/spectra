@@ -13,6 +13,7 @@ data class AppRoutingPreset(
     val isBuiltIn: Boolean = false,
     val mode: AppRoutingMode = AppRoutingMode.BYPASS,
     val packages: Set<String> = emptySet(),
+    val packageRegexes: Set<String> = emptySet(),
     val remoteUrl: String? = null
 ) {
     companion object {

@@ -178,4 +178,67 @@
     <string name="updating_ru_rules">Downloading and matching Russian apps list…</string>
     <string name="all_apps_through_vpn">All apps through VPN</string>
     <string name="bypass_selected">Bypass VPN for selected apps (%1$d)</string>
+
+    <!-- Battery Optimization -->
+    <string name="battery_optimization">Background Work &amp; Battery</string>
+    <string name="battery_optimization_desc">Allow unrestricted background execution so Android doesn\'t kill the VPN</string>
+    <string name="battery_opt_status_disabled">Allowed (Unrestricted)</string>
+    <string name="battery_opt_status_enabled">Restricted (System may kill VPN)</string>
+    <string name="battery_opt_dialog_title">Allow Background Execution</string>
+    <string name="battery_opt_dialog_desc">To keep the VPN service running stably in the background, please grant permission to ignore battery optimizations.</string>
+    <string name="grant_permission">Allow</string>
+
+    <!-- Wi-Fi Exclusions -->
+    <string name="wifi_exclusions">Wi-Fi Exclusions</string>
+    <string name="wifi_exclusions_desc">Bypass VPN on specific Wi-Fi networks</string>
+    <string name="current_wifi_ssid">Current Wi-Fi: %1$s</string>
+    <string name="add_current_wifi">Add</string>
+    <string name="add_wifi_ssid">Add Wi-Fi SSID</string>
+    <string name="wifi_ssid_placeholder">e.g. Home_WiFi</string>
+    <string name="no_wifi_ssids">No excluded Wi-Fi networks added yet</string>
+    <string name="location_permission_title">Location Permission Required</string>
+    <string name="location_permission_desc">Android requires Location permission to detect the current Wi-Fi SSID name.</string>
+    <string name="wifi_added">Wi-Fi \'%1$s\' added to exclusions</string>
+    <string name="wifi_removed">Wi-Fi \'%1$s\' removed from exclusions</string>
+
+    <!-- App Filter Regexes -->
+    <string name="regex_rules">Regex Rules</string>
+    <string name="regex_rules_desc">Add package name regex patterns (e.g. ^ru\\..*)</string>
+    <string name="add_regex_rule">Add Regex Pattern</string>
+    <string name="regex_placeholder">e.g. ^com\\.example\\..*</string>
+    <string name="search_logs">Search logs…</string>
+
+    <!-- Active Config -->
+    <string name="active_config">Active Executable Config</string>
+    <string name="active_config_desc">View and copy the final running Xray JSON configuration</string>
+    <string name="view_config">View</string>
+    <string name="active_config_dialog_title">Active Xray JSON Config</string>
+    <string name="config_copied">Config copied to clipboard</string>
+
+    <!-- Wi-Fi Bypass Config Override -->
+    <string name="custom_wifi_bypass_config">Custom Wi-Fi Bypass Configuration</string>
+    <string name="custom_wifi_bypass_config_desc">Replace default Wi-Fi bypass config with custom Xray JSON</string>
+
+    <!-- DNS & Routing Rules -->
+    <string name="dns_routing_rules">DNS &amp; Routing Rules</string>
+    <string name="dns_routing_desc">Visual designer for DNS servers and Xray routing rules</string>
+    <string name="dns_settings">DNS Settings</string>
+    <string name="routing_rules">Routing Rules</string>
+    <string name="query_strategy">Query Strategy</string>
+    <string name="domain_strategy">Domain Strategy</string>
+    <string name="dns_servers">DNS Servers</string>
+    <string name="add_dns_server">Add DNS Server</string>
+    <string name="add_routing_rule">Add Routing Rule</string>
+    <string name="preset_templates">Presets &amp; Templates</string>
+    <string name="rule_name">Rule Name</string>
+    <string name="action_outbound">Action / Outbound</string>
+    <string name="action_proxy">Proxy (proxy-out)</string>
+    <string name="action_direct">Direct (direct-out)</string>
+    <string name="action_block">Block (block-out)</string>
+    <string name="domains">Domains (geosite/domain/full)</string>
+    <string name="ip_addresses">IP Addresses (geoip/CIDR)</string>
+    <string name="ports">Ports</string>
+    <string name="protocols">Protocols</string>
+    <string name="reset_defaults">Reset to Defaults</string>
+    <string name="reset_rules_confirm">Reset DNS and Routing rules to default settings?</string>
 </resources>

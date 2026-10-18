@@ -70,7 +70,11 @@ fun AppFilterScreen(
             TopAppBar(
                 title = {
                     Column {
-                        Text(stringResource(R.string.app_filter))
+                        Text(
+                            text = stringResource(R.string.app_filter),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
                         Text(
                             text = if (uiState.selectedPresetId == AppRoutingPreset.PRESET_ALL_VPN) {
                                 stringResource(R.string.all_apps_through_vpn)
@@ -78,7 +82,9 @@ fun AppFilterScreen(
                                 stringResource(R.string.bypass_selected, uiState.selectedPackages.size)
                             },
                             style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
                     }
                 },
@@ -226,9 +232,12 @@ private fun PresetsHeader(
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
             Text(
-                text = stringResource(R.string.settings),
+                text = stringResource(R.string.app_filter),
                 style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.Bold
+                fontWeight = FontWeight.Bold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f)
             )
 
             Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -268,6 +277,29 @@ private fun PresetsHeader(
                 )
             }
         }
+
+        if (selectedPreset != null && !selectedPreset.isBuiltIn && selectedPreset.packageRegexes.isNotEmpty()) {
+            Spacer(modifier = Modifier.height(4.dp))
+            LazyRow(
+                contentPadding = PaddingValues(horizontal = 16.dp),
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                items(selectedPreset.packageRegexes.toList()) { regex ->
+                    InputChip(
+                        selected = true,
+                        onClick = {},
+                        label = { Text(regex, style = MaterialTheme.typography.labelSmall) },
+                        trailingIcon = {
+                            Icon(
+                                Icons.Default.Close,
+                                contentDescription = null,
+                                modifier = Modifier.size(14.dp).clickable { }
+                            )
+                        }
+                    )
+                }
+            }
+        }
     }
 }
 
@@ -284,7 +316,7 @@ private fun SearchBarAndControls(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 8.dp),
+            .padding(horizontal = 16.dp, vertical = 6.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         OutlinedTextField(
@@ -306,48 +338,63 @@ private fun SearchBarAndControls(
 
         Row(
             modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            OutlinedButton(
+                onClick = onInvertSelection,
+                modifier = Modifier.weight(1f),
+                contentPadding = PaddingValues(horizontal = 4.dp, vertical = 8.dp)
+            ) {
+                Text(
+                    text = stringResource(R.string.invert_selection),
+                    style = MaterialTheme.typography.labelSmall,
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                )
+            }
+
+            OutlinedButton(
+                onClick = onSelectAll,
+                modifier = Modifier.weight(1f),
+                contentPadding = PaddingValues(horizontal = 4.dp, vertical = 8.dp)
+            ) {
+                Text(
+                    text = stringResource(R.string.select_all),
+                    style = MaterialTheme.typography.labelSmall,
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                )
+            }
+
+            OutlinedButton(
+                onClick = onDeselectAll,
+                modifier = Modifier.weight(1f),
+                contentPadding = PaddingValues(horizontal = 4.dp, vertical = 8.dp)
+            ) {
+                Text(
+                    text = stringResource(R.string.deselect_all),
+                    style = MaterialTheme.typography.labelSmall,
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                )
+            }
+        }
+
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable { onToggleShowSystemApps(!showSystemApps) }
+                .padding(vertical = 2.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(4.dp)
-            ) {
-                OutlinedButton(
-                    onClick = onInvertSelection,
-                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
-                    modifier = Modifier.height(36.dp)
-                ) {
-                    Text(stringResource(R.string.invert_selection), style = MaterialTheme.typography.labelSmall)
-                }
-
-                OutlinedButton(
-                    onClick = onSelectAll,
-                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
-                    modifier = Modifier.height(36.dp)
-                ) {
-                    Text(stringResource(R.string.select_all), style = MaterialTheme.typography.labelSmall)
-                }
-
-                OutlinedButton(
-                    onClick = onDeselectAll,
-                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
-                    modifier = Modifier.height(36.dp)
-                ) {
-                    Text(stringResource(R.string.deselect_all), style = MaterialTheme.typography.labelSmall)
-                }
-            }
-
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    text = stringResource(R.string.show_system_apps),
-                    style = MaterialTheme.typography.labelSmall
-                )
-                Checkbox(
-                    checked = showSystemApps,
-                    onCheckedChange = onToggleShowSystemApps
-                )
-            }
+            Text(
+                text = stringResource(R.string.show_system_apps),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            Switch(
+                checked = showSystemApps,
+                onCheckedChange = { onToggleShowSystemApps(it) }
+            )
         }
     }
 }
@@ -535,4 +582,45 @@ private fun ConfirmDeletePresetDialog(
             }
         }
     )
+}
+
+@androidx.compose.ui.tooling.preview.Preview
+@Composable
+fun AppFilterScreenPreview() {
+    com.oklookat.spectra.ui.theme.SpectraTheme {
+        Surface {
+            Column(modifier = Modifier.fillMaxSize()) {
+                PresetsHeader(
+                    presets = AppRoutingPreset.defaultPresets(),
+                    selectedPresetId = AppRoutingPreset.PRESET_EXCLUDE_RU,
+                    isFetchingRu = false,
+                    onSelectPreset = {},
+                    onCreatePresetClick = {},
+                    onEditPresetClick = {},
+                    onDeletePresetClick = {}
+                )
+                SearchBarAndControls(
+                    searchQuery = "",
+                    onSearchQueryChange = {},
+                    showSystemApps = false,
+                    onToggleShowSystemApps = {},
+                    onInvertSelection = {},
+                    onSelectAll = {},
+                    onDeselectAll = {}
+                )
+                AppItemRow(
+                    appInfo = InstalledAppInfo("ru.yandex.searchplugin", "Яндекс"),
+                    isChecked = true,
+                    getAppIcon = { null },
+                    onToggle = {}
+                )
+                AppItemRow(
+                    appInfo = InstalledAppInfo("com.google.android.youtube", "YouTube"),
+                    isChecked = false,
+                    getAppIcon = { null },
+                    onToggle = {}
+                )
+            }
+        }
+    }
 }

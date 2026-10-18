@@ -164,6 +164,37 @@ class AppFilterRepository @Inject constructor(
         }
     }
 
+    suspend fun addRegexRuleToPreset(presetId: String, regex: String) = withContext(Dispatchers.IO) {
+        val cleanRegex = regex.trim()
+        if (cleanRegex.isBlank()) return@withContext
+
+        context.appFilterDataStore.edit { prefs ->
+            val json = prefs[PreferencesKeys.CUSTOM_PRESETS_JSON] ?: ""
+            val type = object : TypeToken<List<AppRoutingPreset>>() {}.type
+            val list = if (json.isBlank()) mutableListOf() else gson.fromJson<List<AppRoutingPreset>>(json, type).toMutableList()
+            val index = list.indexOfFirst { it.id == presetId }
+            if (index != -1 && !list[index].isBuiltIn) {
+                val updatedRegexes = list[index].packageRegexes + cleanRegex
+                list[index] = list[index].copy(packageRegexes = updatedRegexes)
+                prefs[PreferencesKeys.CUSTOM_PRESETS_JSON] = gson.toJson(list)
+            }
+        }
+    }
+
+    suspend fun removeRegexRuleFromPreset(presetId: String, regex: String) = withContext(Dispatchers.IO) {
+        context.appFilterDataStore.edit { prefs ->
+            val json = prefs[PreferencesKeys.CUSTOM_PRESETS_JSON] ?: ""
+            val type = object : TypeToken<List<AppRoutingPreset>>() {}.type
+            val list = if (json.isBlank()) mutableListOf() else gson.fromJson<List<AppRoutingPreset>>(json, type).toMutableList()
+            val index = list.indexOfFirst { it.id == presetId }
+            if (index != -1 && !list[index].isBuiltIn) {
+                val updatedRegexes = list[index].packageRegexes - regex
+                list[index] = list[index].copy(packageRegexes = updatedRegexes)
+                prefs[PreferencesKeys.CUSTOM_PRESETS_JSON] = gson.toJson(list)
+            }
+        }
+    }
+
     suspend fun deleteCustomPreset(presetId: String) = withContext(Dispatchers.IO) {
         context.appFilterDataStore.edit { prefs ->
             val json = prefs[PreferencesKeys.CUSTOM_PRESETS_JSON] ?: ""

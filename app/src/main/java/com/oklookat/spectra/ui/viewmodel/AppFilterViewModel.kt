@@ -170,6 +170,22 @@ class AppFilterViewModel @Inject constructor(
         }
     }
 
+    fun addRegexRule(regex: String) {
+        viewModelScope.launch {
+            appFilterRepository.addRegexRuleToPreset(uiState.selectedPresetId, regex)
+            _events.emit(MainUiEvent.ShowToast(messageResId = R.string.preset_updated))
+            if (XrayVpnService.isServiceRunning) _events.emit(MainUiEvent.RestartVpn)
+        }
+    }
+
+    fun removeRegexRule(regex: String) {
+        viewModelScope.launch {
+            appFilterRepository.removeRegexRuleFromPreset(uiState.selectedPresetId, regex)
+            _events.emit(MainUiEvent.ShowToast(messageResId = R.string.preset_updated))
+            if (XrayVpnService.isServiceRunning) _events.emit(MainUiEvent.RestartVpn)
+        }
+    }
+
     fun deleteCustomPreset(presetId: String) {
         viewModelScope.launch {
             appFilterRepository.deleteCustomPreset(presetId)

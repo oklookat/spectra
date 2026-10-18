@@ -2,6 +2,7 @@ package com.oklookat.spectra
 
 import android.Manifest
 import android.content.ComponentName
+import android.content.Context
 import android.content.Intent
 import android.content.ServiceConnection
 import android.content.pm.PackageManager
@@ -9,6 +10,7 @@ import android.net.VpnService
 import android.os.Build
 import android.os.Bundle
 import android.os.IBinder
+import android.os.PowerManager
 import android.provider.Settings
 import android.widget.Toast
 import androidx.activity.ComponentActivity
@@ -82,10 +84,24 @@ class MainActivity : ComponentActivity() {
                 SpectraApp(
                     onToggleVpn = { enabled ->
                         if (enabled) tryStartVpn() else stopVpnService()
-                    }
+                    },
+                    onRequestBatteryOptimization = { requestBatteryOptimization() },
+                    onRequestLocationPermission = { requestLocationPermission() }
                 )
             }
         }
+    }
+
+    private val requestBatteryOpt = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) {
+        viewModel.refreshBatteryOptimizationStatus()
+    }
+
+    private val requestLocationPerms = registerForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) {
+        viewModel.refreshWifiStatus()
     }
 
     private fun handleUiEvent(event: MainUiEvent) {
@@ -97,7 +113,42 @@ class MainActivity : ComponentActivity() {
             }
             is MainUiEvent.RestartVpn -> startVpnService()
             is MainUiEvent.OpenDeepLinkSettings -> openDeepLinkSettings()
+            is MainUiEvent.RequestBatteryOptimization -> requestBatteryOptimization()
+            is MainUiEvent.RequestLocationPermission -> requestLocationPermission()
         }
+    }
+
+    fun requestBatteryOptimization() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            val powerManager = getSystemService(Context.POWER_SERVICE) as? PowerManager
+            if (powerManager != null && !powerManager.isIgnoringBatteryOptimizations(packageName)) {
+                val intent = Intent(
+                    Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
+                    "package:$packageName".toUri()
+                )
+                try {
+                    requestBatteryOpt.launch(intent)
+                } catch (_: Exception) {
+                    val fallbackIntent = Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)
+                    try {
+                        requestBatteryOpt.launch(fallbackIntent)
+                    } catch (_: Exception) {
+                        Toast.makeText(this, getString(R.string.could_not_open_settings), Toast.LENGTH_SHORT).show()
+                    }
+                }
+            } else {
+                Toast.makeText(this, getString(R.string.battery_opt_status_disabled), Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
+    fun requestLocationPermission() {
+        requestLocationPerms.launch(
+            arrayOf(
+                Manifest.permission.ACCESS_FINE_LOCATION,
+                Manifest.permission.ACCESS_COARSE_LOCATION
+            )
+        )
     }
 
     private fun openDeepLinkSettings() {

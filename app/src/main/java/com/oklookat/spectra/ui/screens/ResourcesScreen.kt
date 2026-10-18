@@ -22,6 +22,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.oklookat.spectra.R
@@ -29,6 +30,7 @@ import com.oklookat.spectra.model.Resource
 import com.oklookat.spectra.ui.components.AppButton
 import com.oklookat.spectra.ui.components.AppSwitch
 import com.oklookat.spectra.ui.components.AppTextButton
+import com.oklookat.spectra.ui.theme.SpectraTheme
 import com.oklookat.spectra.ui.viewmodel.ResourcePresetType
 import com.oklookat.spectra.ui.viewmodel.ResourcesViewModel
 import com.oklookat.spectra.util.TvUtils
@@ -450,5 +452,38 @@ fun formatFileSize(size: Long): String {
         stringResource(R.string.size_mb, mb)
     } else {
         stringResource(R.string.size_kb, kb)
+    }
+}
+
+@Preview
+@Composable
+fun ResourcesScreenPreview() {
+    SpectraTheme {
+        Surface {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                ResourceItem(
+                    resource = Resource(name = "geoip.dat", size = 15420000L, isDefault = true),
+                    downloadProgress = null,
+                    onUpdate = {},
+                    onDelete = {}
+                )
+                ResourceItem(
+                    resource = Resource(
+                        name = "geosite.dat",
+                        size = 21500000L,
+                        isDefault = false,
+                        url = "https://github.com/v2fly/domain-list-community/releases/latest/download/dlc.dat"
+                    ),
+                    downloadProgress = 0.65f,
+                    onUpdate = {},
+                    onDelete = {}
+                )
+            }
+        }
     }
 }

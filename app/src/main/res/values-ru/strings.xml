@@ -176,4 +176,67 @@
     <string name="updating_ru_rules">Загрузка и поиск росс. приложений…</string>
     <string name="all_apps_through_vpn">Все приложения через VPN</string>
     <string name="bypass_selected">Обход VPN для выбранных приложений (%1$d)</string>
+
+    <!-- Оптимизация батареи -->
+    <string name="battery_optimization">Работа в фоновом режиме</string>
+    <string name="battery_optimization_desc">Разрешите работу без ограничений, чтобы система не отключала VPN</string>
+    <string name="battery_opt_status_disabled">Разрешено (Без ограничений)</string>
+    <string name="battery_opt_status_enabled">Ограничено (Система может отключать VPN)</string>
+    <string name="battery_opt_dialog_title">Разрешение работы в фоне</string>
+    <string name="battery_opt_dialog_desc">Чтобы VPN работала стабильно в фоновом режиме, разрешите приложению игнорировать оптимизацию батареи.</string>
+    <string name="grant_permission">Разрешить</string>
+
+    <!-- Исключения Wi-Fi -->
+    <string name="wifi_exclusions">Исключения Wi-Fi сетей</string>
+    <string name="wifi_exclusions_desc">Пускать весь трафик в обход VPN при подключении к определенным Wi-Fi сетям</string>
+    <string name="current_wifi_ssid">Текущая сеть Wi-Fi: %1$s</string>
+    <string name="add_current_wifi">Добавить</string>
+    <string name="add_wifi_ssid">Добавить Wi-Fi SSID</string>
+    <string name="wifi_ssid_placeholder">Например: Home_WiFi</string>
+    <string name="no_wifi_ssids">Нет добавленных исключений Wi-Fi сетей</string>
+    <string name="location_permission_title">Требуется доступ к геолокации</string>
+    <string name="location_permission_desc">Системе Android требуется доступ к точной геолокации для определения имени текущей Wi-Fi сети.</string>
+    <string name="wifi_added">Сеть Wi-Fi \'%1$s\' добавлена в исключения</string>
+    <string name="wifi_removed">Сеть Wi-Fi \'%1$s\' удалена из исключений</string>
+
+    <!-- Регулярные выражения -->
+    <string name="regex_rules">Регулярные выражения</string>
+    <string name="regex_rules_desc">Добавьте шаблоны регулярных выражений для пакетов (например, ^ru\\..*)</string>
+    <string name="add_regex_rule">Добавить шаблон регулярного выражения</string>
+    <string name="regex_placeholder">Например: ^com\\.example\\..*</string>
+    <string name="search_logs">Поиск по логам…</string>
+
+    <!-- Исполняемый конфиг -->
+    <string name="active_config">Исполняемый конфиг Xray</string>
+    <string name="active_config_desc">Просмотр и копирование итогового JSON конфига Xray</string>
+    <string name="view_config">Просмотреть</string>
+    <string name="active_config_dialog_title">Исполняемый JSON конфиг Xray</string>
+    <string name="config_copied">Конфиг скопирован в буфер обмена</string>
+
+    <!-- Кастомная конфигурация обхода Wi-Fi -->
+    <string name="custom_wifi_bypass_config">Пользовательская конфигурация обхода</string>
+    <string name="custom_wifi_bypass_config_desc">Заменить стандартный конфиг обхода Wi-Fi своим Xray JSON</string>
+
+    <!-- DNS & Routing Rules -->
+    <string name="dns_routing_rules">DNS и маршрутизация</string>
+    <string name="dns_routing_desc">Конструктор DNS-серверов и правил маршрутизации Xray</string>
+    <string name="dns_settings">Настройки DNS</string>
+    <string name="routing_rules">Правила маршрутизации</string>
+    <string name="query_strategy">Стратегия DNS-запросов</string>
+    <string name="domain_strategy">Стратегия поиска доменов</string>
+    <string name="dns_servers">DNS-серверы</string>
+    <string name="add_dns_server">Добавить DNS-сервер</string>
+    <string name="add_routing_rule">Добавить правило</string>
+    <string name="preset_templates">Шаблоны пресетов</string>
+    <string name="rule_name">Название правила</string>
+    <string name="action_outbound">Действие (Outbound)</string>
+    <string name="action_proxy">Через прокси (proxy-out)</string>
+    <string name="action_direct">Напрямую (direct-out)</string>
+    <string name="action_block">Заблокировать (block-out)</string>
+    <string name="domains">Домены (geosite/domain/full)</string>
+    <string name="ip_addresses">IP-адреса (geoip/CIDR)</string>
+    <string name="ports">Порты</string>
+    <string name="protocols">Протоколы</string>
+    <string name="reset_defaults">Сбросить по умолчанию</string>
+    <string name="reset_rules_confirm">Сбросить настройки DNS и правила маршрутизации до первоначальных?</string>
 </resources>

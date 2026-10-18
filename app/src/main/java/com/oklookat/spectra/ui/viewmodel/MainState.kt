@@ -17,7 +17,12 @@ data class SettingsState(
     val vpnDns: String = "",
     val vpnAddressIpv6: String = "",
     val vpnDnsIpv6: String = "",
-    val vpnMtu: Int = 9000
+    val vpnMtu: Int = 9000,
+    val isWifiExclusionEnabled: Boolean = false,
+    val excludedWifiSsids: Set<String> = emptySet(),
+    val currentWifiSsid: String? = null,
+    val hasLocationPermission: Boolean = false,
+    val isIgnoringBatteryOptimizations: Boolean = false
 )
 
 data class MainUiState(
@@ -63,4 +68,6 @@ sealed class MainUiEvent {
     ) : MainUiEvent()
     data object RestartVpn : MainUiEvent()
     data object OpenDeepLinkSettings : MainUiEvent()
+    data object RequestBatteryOptimization : MainUiEvent()
+    data object RequestLocationPermission : MainUiEvent()
 }

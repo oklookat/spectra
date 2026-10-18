@@ -30,7 +30,8 @@ import javax.inject.Singleton
 @Singleton
 class ProfileRepository @Inject constructor(
     @ApplicationContext private val context: Context,
-    private val dao: ProfileDao
+    private val dao: ProfileDao,
+    private val settingsRepository: SettingsRepository
 ) {
     private val sharedPreferences = context.getSharedPreferences("profiles_prefs", Context.MODE_PRIVATE)
     private val client = OkHttpClient.Builder()
@@ -149,7 +150,7 @@ class ProfileRepository @Inject constructor(
 
                 val links = decodedBody.lines()
                     .map { it.trim() }
-                    .filter { it.isNotEmpty() && (it.startsWith("vless://") || it.startsWith("vmess://") || it.startsWith("ss://") || it.startsWith("trojan://")) }
+                    .filter { it.isNotEmpty() && ShareLinkParser.isShareLink(it) }
 
                 if (links.isEmpty()) {
                     LogManager.addLog("[ProfileRepo] No valid links found in group '${group.name}'")
@@ -303,13 +304,18 @@ class ProfileRepository @Inject constructor(
         if (!file.exists()) return null
         val content = file.readText(Charset.defaultCharset()).trim()
         
-        if (content.startsWith("vless://") || content.startsWith("vmess://") || 
-            content.startsWith("ss://") || content.startsWith("trojan://")) {
+        if (ShareLinkParser.isShareLink(content)) {
             return try {
                 val shareLink = ShareLinkParser.parse(content)
                 val outbound = XrayConfigBuild.fromShareLink(shareLink)
                 if (outbound != null) {
-                    XrayConfigBuild.buildFullConfig(outbound)
+                    val settings = kotlinx.coroutines.runBlocking { settingsRepository.getSettingsDataOnce() }
+                    XrayConfigBuild.buildFullConfig(
+                        proxyOutbound = outbound,
+                        mtu = settings.vpnMtu,
+                        dnsConfig = settings.customDnsConfig,
+                        routingConfig = settings.customRoutingConfig
+                    )
                 } else {
                     content
                 }
@@ -352,9 +358,10 @@ class ProfileRepository @Inject constructor(
 
     suspend fun measurePing(profile: Profile, url: String = DEFAULT_PING_URL): Long = withContext(Dispatchers.IO) {
         ensureEnvInitialized()
-        val configJson = getProfileContent(profile) ?: return@withContext -1L
+        val rawConfigJson = getProfileContent(profile) ?: return@withContext -1L
+        val pingConfigJson = com.oklookat.spectra.model.XrayConfigBuild.prepareConfigForPing(rawConfigJson)
         try {
-            val delayValue = Libv2ray.measureOutboundDelay(configJson, url)
+            val delayValue = Libv2ray.measureOutboundDelay(pingConfigJson, url)
             val updatedProfile = profile.copy(lastPing = delayValue)
             dao.updateProfile(updatedProfile)
             delayValue

@@ -4,8 +4,12 @@ import android.content.Context
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.*
 import androidx.datastore.preferences.preferencesDataStore
+import com.google.gson.Gson
+import com.oklookat.spectra.model.CustomDnsConfig
+import com.oklookat.spectra.model.CustomRoutingConfig
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -16,6 +20,8 @@ private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(na
 class SettingsRepository @Inject constructor(
     @ApplicationContext private val context: Context
 ) {
+    private val gson = Gson()
+
     private object PreferencesKeys {
         val ENABLE_IPV6 = booleanPreferencesKey("enable_ipv6")
         val VPN_ADDRESS = stringPreferencesKey("vpn_address")
@@ -24,9 +30,25 @@ class SettingsRepository @Inject constructor(
         val VPN_DNS_IPV6 = stringPreferencesKey("vpn_dns_ipv6")
         val VPN_MTU = intPreferencesKey("vpn_mtu")
         val SELECTED_PROFILE_ID = stringPreferencesKey("selected_profile_id")
+        val CUSTOM_DNS_JSON = stringPreferencesKey("custom_dns_json")
+        val CUSTOM_ROUTING_JSON = stringPreferencesKey("custom_routing_json")
     }
 
     val settingsFlow: Flow<SettingsData> = context.dataStore.data.map { preferences ->
+        val dnsJson = preferences[PreferencesKeys.CUSTOM_DNS_JSON]
+        val dnsConfig = if (!dnsJson.isNullOrBlank()) {
+            try { gson.fromJson(dnsJson, CustomDnsConfig::class.java) } catch (_: Exception) { CustomDnsConfig.default() }
+        } else {
+            CustomDnsConfig.default()
+        }
+
+        val routingJson = preferences[PreferencesKeys.CUSTOM_ROUTING_JSON]
+        val routingConfig = if (!routingJson.isNullOrBlank()) {
+            try { gson.fromJson(routingJson, CustomRoutingConfig::class.java) } catch (_: Exception) { CustomRoutingConfig.default() }
+        } else {
+            CustomRoutingConfig.default()
+        }
+
         SettingsData(
             isIpv6Enabled = preferences[PreferencesKeys.ENABLE_IPV6] ?: false,
             vpnAddress = preferences[PreferencesKeys.VPN_ADDRESS] ?: "10.0.0.1",
@@ -34,7 +56,9 @@ class SettingsRepository @Inject constructor(
             vpnAddressIpv6 = preferences[PreferencesKeys.VPN_ADDRESS_IPV6] ?: "fd00::1",
             vpnDnsIpv6 = preferences[PreferencesKeys.VPN_DNS_IPV6] ?: "fd00::2",
             vpnMtu = preferences[PreferencesKeys.VPN_MTU] ?: 9000,
-            selectedProfileId = preferences[PreferencesKeys.SELECTED_PROFILE_ID]
+            selectedProfileId = preferences[PreferencesKeys.SELECTED_PROFILE_ID],
+            customDnsConfig = dnsConfig,
+            customRoutingConfig = routingConfig
         )
     }
 
@@ -58,6 +82,25 @@ class SettingsRepository @Inject constructor(
             else it[PreferencesKeys.SELECTED_PROFILE_ID] = id
         }
     }
+
+    suspend fun setCustomDnsConfig(config: CustomDnsConfig) {
+        val json = gson.toJson(config)
+        context.dataStore.edit { it[PreferencesKeys.CUSTOM_DNS_JSON] = json }
+    }
+
+    suspend fun setCustomRoutingConfig(config: CustomRoutingConfig) {
+        val json = gson.toJson(config)
+        context.dataStore.edit { it[PreferencesKeys.CUSTOM_ROUTING_JSON] = json }
+    }
+
+    suspend fun resetCustomRulesToDefault() {
+        context.dataStore.edit {
+            it.remove(PreferencesKeys.CUSTOM_DNS_JSON)
+            it.remove(PreferencesKeys.CUSTOM_ROUTING_JSON)
+        }
+    }
+
+    suspend fun getSettingsDataOnce(): SettingsData = settingsFlow.first()
 }
 
 data class SettingsData(
@@ -67,5 +110,7 @@ data class SettingsData(
     val vpnAddressIpv6: String,
     val vpnDnsIpv6: String,
     val vpnMtu: Int,
-    val selectedProfileId: String?
+    val selectedProfileId: String?,
+    val customDnsConfig: CustomDnsConfig = CustomDnsConfig.default(),
+    val customRoutingConfig: CustomRoutingConfig = CustomRoutingConfig.default()
 )

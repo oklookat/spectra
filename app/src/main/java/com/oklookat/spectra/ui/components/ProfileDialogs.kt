@@ -18,15 +18,14 @@ import com.oklookat.spectra.model.Profile
 import com.oklookat.spectra.util.DeepLinkHandler
 import com.oklookat.spectra.util.TvUtils
 
+import com.oklookat.spectra.model.ShareLinkParser
+
 private fun isValidInputUrl(url: String): Boolean {
     val trimmed = url.trim().lowercase()
     return trimmed.startsWith("http://") ||
             trimmed.startsWith("https://") ||
             trimmed.startsWith("spectra://") ||
-            trimmed.startsWith("vless://") ||
-            trimmed.startsWith("vmess://") ||
-            trimmed.startsWith("trojan://") ||
-            trimmed.startsWith("ss://")
+            ShareLinkParser.isShareLink(trimmed)
 }
 
 @Composable

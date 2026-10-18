@@ -24,10 +24,12 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.oklookat.spectra.BuildConfig
 import com.oklookat.spectra.R
 import com.oklookat.spectra.ui.components.LinkItem
+import com.oklookat.spectra.ui.theme.SpectraTheme
 import com.oklookat.spectra.ui.viewmodel.HomeUiState
 import com.oklookat.spectra.util.TvUtils
 import libv2ray.Libv2ray
@@ -282,12 +284,13 @@ private fun VpnToggleButton(
 private fun AppVersionInfo() {
     val context = LocalContext.current
     val isTv = TvUtils.isTv(context)
-    
+    val isPreview = androidx.compose.ui.platform.LocalInspectionMode.current
+
     val appVersion = BuildConfig.VERSION_NAME
 
-    val xrayFullVersion = try {
+    val xrayFullVersion = if (isPreview) "v26.10.10 (Lib v26.10.10, core v26.10.10)" else try {
         Libv2ray.checkVersionX()
-    } catch (_: Exception) {
+    } catch (_: Throwable) {
         ""
     }
 
@@ -320,5 +323,16 @@ private fun AppVersionInfo() {
         ) {
             links()
         }
+    }
+}
+
+@Preview
+@Composable
+fun MainScreenPreview() {
+    SpectraTheme {
+        MainScreen(
+            uiState = HomeUiState(isVpnEnabled = true),
+            onToggleVpn = {}
+        )
     }
 }

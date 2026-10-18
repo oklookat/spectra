@@ -23,11 +23,13 @@ import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.oklookat.spectra.R
 import com.oklookat.spectra.model.Group
 import com.oklookat.spectra.model.P2PPayload
+import com.oklookat.spectra.ui.theme.SpectraTheme
 import com.oklookat.spectra.model.Profile
 import com.oklookat.spectra.ui.components.*
 import com.oklookat.spectra.ui.viewmodel.MainViewModel
@@ -590,6 +592,48 @@ fun SortBottomSheet(
                         onSortSelected(sort)
                         onDismiss()
                     }
+                )
+            }
+        }
+    }
+}
+
+@Preview
+@Composable
+fun ProfilesScreenPreview() {
+    SpectraTheme {
+        Surface {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                ProfileItem(
+                    profile = Profile(id = "1", name = "VLESS - Main Server", isRemote = false, lastPing = 42),
+                    isSelectedForDeletion = false,
+                    isActive = true,
+                    isTv = false,
+                    onLongClick = {},
+                    onClick = {},
+                    onEditClick = {},
+                    onRefreshClick = {},
+                    onShareP2PClick = {},
+                    onDeleteClick = {},
+                    onPingClick = {}
+                )
+                ProfileItem(
+                    profile = Profile(id = "2", name = "VMess - Backup Server", isRemote = true, lastPing = 120),
+                    isSelectedForDeletion = false,
+                    isActive = false,
+                    isTv = false,
+                    onLongClick = {},
+                    onClick = {},
+                    onEditClick = {},
+                    onRefreshClick = {},
+                    onShareP2PClick = {},
+                    onDeleteClick = {},
+                    onPingClick = {}
                 )
             }
         }

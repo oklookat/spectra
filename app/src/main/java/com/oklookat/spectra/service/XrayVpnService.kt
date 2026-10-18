@@ -38,7 +38,17 @@ import java.util.concurrent.locks.ReentrantLock
 import kotlin.concurrent.thread
 import kotlin.concurrent.withLock
 
+import com.oklookat.spectra.data.repository.WifiExclusionRepository
+import dagger.hilt.android.AndroidEntryPoint
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
+import javax.inject.Inject
+
+@AndroidEntryPoint
 class XrayVpnService : VpnService() {
+
+    @Inject
+    lateinit var wifiExclusionRepository: WifiExclusionRepository
 
     inner class ServiceBinder : Binder() {
         fun getService(): XrayVpnService = this@XrayVpnService
@@ -61,6 +71,10 @@ class XrayVpnService : VpnService() {
 
         @Volatile
         var runningProfileId: String? = null
+            private set
+
+        @Volatile
+        var activeConfigJson: String? = null
             private set
 
         fun startOrRestart(
@@ -98,6 +112,11 @@ class XrayVpnService : VpnService() {
     @Volatile
     private var logcatProcess: Process? = null
 
+    private var networkCallback: android.net.ConnectivityManager.NetworkCallback? = null
+    @Volatile private var isCurrentlyWifiBypassed = false
+    @Volatile private var lastRawConfig = ""
+    @Volatile private var lastVpnParams: VpnParams? = null
+
     override fun onBind(intent: Intent?): IBinder? {
         if (intent?.action == VpnService.SERVICE_INTERFACE) {
             return super.onBind(intent)
@@ -108,6 +127,8 @@ class XrayVpnService : VpnService() {
     override fun onCreate() {
         super.onCreate()
         createNotificationChannel()
+        registerNetworkCallback()
+        observeWifiExclusionSettings()
         serviceScope.launch {
             withContext(Dispatchers.IO) {
                 copyAssetsToFilesDir()
@@ -122,10 +143,245 @@ class XrayVpnService : VpnService() {
         }
     }
 
+    private fun observeWifiExclusionSettings() {
+        serviceScope.launch {
+            combine(
+                wifiExclusionRepository.isWifiExclusionEnabledFlow,
+                wifiExclusionRepository.excludedSsidsFlow,
+                wifiExclusionRepository.customBypassConfigJsonFlow,
+                wifiExclusionRepository.bypassDnsPrimaryFlow,
+                wifiExclusionRepository.bypassDnsSecondaryFlow
+            ) { _, _, _, _, _ -> Unit }
+                .collect {
+                    if (!isUserStopped && _isRunning.value) {
+                        onNetworkStateChanged(currentActiveNetwork, null)
+                    }
+                }
+        }
+    }
+
+    @Volatile private var currentActiveNetwork: android.net.Network? = null
+
+    private fun registerNetworkCallback() {
+        try {
+            val cm = getSystemService(Context.CONNECTIVITY_SERVICE) as? android.net.ConnectivityManager ?: return
+            val request = android.net.NetworkRequest.Builder()
+                .addCapability(android.net.NetworkCapabilities.NET_CAPABILITY_INTERNET)
+                .addCapability(android.net.NetworkCapabilities.NET_CAPABILITY_NOT_VPN)
+                .build()
+
+            val callback = try {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                    object : android.net.ConnectivityManager.NetworkCallback(
+                        android.net.ConnectivityManager.NetworkCallback.FLAG_INCLUDE_LOCATION_INFO
+                    ) {
+                        override fun onAvailable(network: android.net.Network) {
+                            onNetworkStateChanged(network, null)
+                        }
+
+                        override fun onLost(network: android.net.Network) {
+                            onNetworkStateChanged(null, null)
+                        }
+
+                        override fun onCapabilitiesChanged(
+                            network: android.net.Network,
+                            networkCapabilities: android.net.NetworkCapabilities
+                        ) {
+                            onNetworkStateChanged(network, networkCapabilities)
+                        }
+                    }
+                } else {
+                    object : android.net.ConnectivityManager.NetworkCallback() {
+                        override fun onAvailable(network: android.net.Network) {
+                            onNetworkStateChanged(network, null)
+                        }
+
+                        override fun onLost(network: android.net.Network) {
+                            onNetworkStateChanged(null, null)
+                        }
+
+                        override fun onCapabilitiesChanged(
+                            network: android.net.Network,
+                            networkCapabilities: android.net.NetworkCapabilities
+                        ) {
+                            onNetworkStateChanged(network, networkCapabilities)
+                        }
+                    }
+                }
+            } catch (e: SecurityException) {
+                object : android.net.ConnectivityManager.NetworkCallback() {
+                    override fun onAvailable(network: android.net.Network) {
+                        onNetworkStateChanged(network, null)
+                    }
+
+                    override fun onLost(network: android.net.Network) {
+                        onNetworkStateChanged(null, null)
+                    }
+
+                    override fun onCapabilitiesChanged(
+                        network: android.net.Network,
+                        networkCapabilities: android.net.NetworkCapabilities
+                    ) {
+                        onNetworkStateChanged(network, networkCapabilities)
+                    }
+                }
+            }
+            cm.registerNetworkCallback(request, callback)
+            networkCallback = callback
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to register NetworkCallback", e)
+        }
+    }
+
+    private fun getPhysicalActiveNetwork(networkHint: android.net.Network? = null): android.net.Network? {
+        val cm = getSystemService(Context.CONNECTIVITY_SERVICE) as? android.net.ConnectivityManager ?: return null
+
+        // 1. Prioritize Wi-Fi if available in physical networks
+        for (net in cm.allNetworks) {
+            val caps = cm.getNetworkCapabilities(net) ?: continue
+            if (caps.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_NOT_VPN) &&
+                caps.hasTransport(android.net.NetworkCapabilities.TRANSPORT_WIFI)
+            ) {
+                return net
+            }
+        }
+
+        // 2. If no Wi-Fi, check networkHint for Cellular
+        if (networkHint != null) {
+            val caps = cm.getNetworkCapabilities(networkHint)
+            if (caps != null && caps.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_NOT_VPN) &&
+                caps.hasTransport(android.net.NetworkCapabilities.TRANSPORT_CELLULAR)
+            ) {
+                return networkHint
+            }
+        }
+
+        // 3. Otherwise find any physical Cellular network
+        for (net in cm.allNetworks) {
+            val caps = cm.getNetworkCapabilities(net) ?: continue
+            if (caps.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_NOT_VPN) &&
+                caps.hasTransport(android.net.NetworkCapabilities.TRANSPORT_CELLULAR)
+            ) {
+                return net
+            }
+        }
+
+        return null
+    }
+
+    private fun updateUnderlyingNetwork(network: android.net.Network?) {
+        try {
+            val physicalNetwork = getPhysicalActiveNetwork(network)
+            if (physicalNetwork != null) {
+                setUnderlyingNetworks(arrayOf(physicalNetwork))
+            } else {
+                setUnderlyingNetworks(null)
+            }
+        } catch (e: Exception) {
+            try {
+                setUnderlyingNetworks(null)
+            } catch (_: Exception) {}
+        }
+    }
+
+    @Volatile private var isUserStopped = false
+    @Volatile private var networkUpdateJob: kotlinx.coroutines.Job? = null
+
+    private fun unregisterNetworkCallback() {
+        try {
+            networkCallback?.let {
+                val cm = getSystemService(Context.CONNECTIVITY_SERVICE) as? android.net.ConnectivityManager
+                cm?.unregisterNetworkCallback(it)
+            }
+        } catch (_: Exception) {}
+        networkCallback = null
+    }
+
+    private fun onNetworkStateChanged(
+        network: android.net.Network?,
+        networkCapabilities: android.net.NetworkCapabilities? = null
+    ) {
+        if (isUserStopped || !_isRunning.value) return
+
+        val cm = getSystemService(Context.CONNECTIVITY_SERVICE) as? android.net.ConnectivityManager
+        val activePhysicalNetwork = getPhysicalActiveNetwork(network)
+
+        updateUnderlyingNetwork(activePhysicalNetwork)
+        currentActiveNetwork = activePhysicalNetwork
+
+        networkUpdateJob?.cancel()
+        networkUpdateJob = serviceScope.launch(Dispatchers.IO) {
+            if (isUserStopped || !_isRunning.value) return@launch
+
+            val params = lastVpnParams ?: return@launch
+            val rawConfig = lastRawConfig.ifEmpty { return@launch }
+
+            val capsToUse = networkCapabilities ?: (activePhysicalNetwork?.let { cm?.getNetworkCapabilities(it) })
+
+            val isWifi = activePhysicalNetwork != null &&
+                    capsToUse?.hasTransport(android.net.NetworkCapabilities.TRANSPORT_WIFI) == true
+
+            var currentSsid = if (isWifi) wifiExclusionRepository.getCurrentWifiSsid(capsToUse) else null
+
+            if (isWifi && currentSsid == null) {
+                for (retry in 1..10) {
+                    kotlinx.coroutines.delay(300)
+                    if (isUserStopped || !_isRunning.value) return@launch
+                    val currentCaps = activePhysicalNetwork?.let { cm?.getNetworkCapabilities(it) } ?: capsToUse
+                    currentSsid = wifiExclusionRepository.getCurrentWifiSsid(currentCaps)
+                    if (currentSsid != null) break
+                }
+            }
+
+            val isEnabled = try {
+                wifiExclusionRepository.isWifiExclusionEnabledFlow.first()
+            } catch (_: Exception) { false }
+
+            val excludedSsids = try {
+                wifiExclusionRepository.excludedSsidsFlow.first()
+            } catch (_: Exception) { emptySet() }
+
+            val targetBypassState = when {
+                !isEnabled -> false
+                !isWifi -> false
+                currentSsid != null -> excludedSsids.contains(currentSsid)
+                else -> isCurrentlyWifiBypassed
+            }
+
+            if (isWifi) {
+                LogManager.addLog("[Service] Wi-Fi network active. SSID: '${currentSsid ?: "<unknown>"}' | Exclusion Enabled: $isEnabled | Excluded SSIDs: $excludedSsids -> Target Bypass State: $targetBypassState (Current: $isCurrentlyWifiBypassed)")
+            } else {
+                LogManager.addLog("[Service] Mobile/Cellular network active -> Target Bypass State: false (Current: $isCurrentlyWifiBypassed)")
+            }
+
+            if (targetBypassState != isCurrentlyWifiBypassed) {
+                isCurrentlyWifiBypassed = targetBypassState
+                val activeConfig = if (targetBypassState) {
+                    LogManager.addLog("[Service] Connected to excluded Wi-Fi '${currentSsid ?: ""}'. Switching to Wi-Fi bypass config.")
+                    wifiExclusionRepository.getActiveBypassConfigJson()
+                } else {
+                    val netType = if (isWifi) "Wi-Fi" else "Cellular/Mobile"
+                    LogManager.addLog("[Service] Left excluded Wi-Fi ($netType). Restoring original VPN profile config.")
+                    rawConfig
+                }
+
+                lifecycleLock.withLock {
+                    if (isUserStopped || !_isRunning.value) return@withLock
+                    startVpnLocked(activeConfig, params)
+                }
+            }
+        }
+    }
+
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (intent?.action == ACTION_STOP) {
             stopVpn()
             return START_NOT_STICKY
+        }
+
+        isUserStopped = false
+        if (networkCallback == null) {
+            registerNetworkCallback()
         }
 
         val notification = buildNotification()
@@ -155,9 +411,9 @@ class XrayVpnService : VpnService() {
             val rawConfig = configJson.ifEmpty {
                 withContext(Dispatchers.IO) { loadConfigFromAssets() }
             }
-            val config = com.oklookat.spectra.model.XrayConfigBuild.prepareConfigForAndroid(rawConfig)
+            val preparedConfig = com.oklookat.spectra.model.XrayConfigBuild.prepareConfigForAndroid(rawConfig)
 
-            if (config.isEmpty()) {
+            if (preparedConfig.isEmpty()) {
                 Log.e(TAG, "No config found, stopping service")
                 LogManager.addLog("[Service] Stopping: No Xray configuration provided")
                 stopVpn()
@@ -174,10 +430,35 @@ class XrayVpnService : VpnService() {
                 disallowedPackages = intent?.getStringArrayListExtra("DISALLOWED_PACKAGES") ?: emptyList()
             )
 
+            lastRawConfig = preparedConfig
+            lastVpnParams = vpnParams
+
+            val isEnabled = try {
+                wifiExclusionRepository.isWifiExclusionEnabledFlow.first()
+            } catch (_: Exception) { false }
+
+            val cm = getSystemService(Context.CONNECTIVITY_SERVICE) as? android.net.ConnectivityManager
+            val activePhysicalNet = getPhysicalActiveNetwork(currentActiveNetwork)
+            val currentCaps = activePhysicalNet?.let { cm?.getNetworkCapabilities(it) }
+            val currentSsid = wifiExclusionRepository.getCurrentWifiSsid(currentCaps)
+            val excludedSsids = try {
+                wifiExclusionRepository.excludedSsidsFlow.first()
+            } catch (_: Exception) { emptySet() }
+
+            val shouldBypass = isEnabled && currentSsid != null && excludedSsids.contains(currentSsid)
+            isCurrentlyWifiBypassed = shouldBypass
+
+            val finalConfig = if (shouldBypass) {
+                LogManager.addLog("[Service] Connected to excluded Wi-Fi '$currentSsid'. Using Wi-Fi bypass config.")
+                wifiExclusionRepository.getActiveBypassConfigJson()
+            } else {
+                preparedConfig
+            }
+
             withContext(Dispatchers.IO) {
                 lifecycleLock.withLock {
                     runningProfileId = profileId
-                    startVpnLocked(config, vpnParams)
+                    startVpnLocked(finalConfig, vpnParams)
                 }
             }
         }
@@ -196,6 +477,7 @@ class XrayVpnService : VpnService() {
     )
 
     private fun startVpnLocked(configJson: String, params: VpnParams) {
+        activeConfigJson = configJson
         // Stop previous instance if running
         stopCoreLocked()
         closeVpnInterfaceLocked()
@@ -230,6 +512,7 @@ class XrayVpnService : VpnService() {
             }
 
             vpnInterface = builder.establish()
+            updateUnderlyingNetwork(currentActiveNetwork)
 
             val pfd = vpnInterface
             if (pfd == null) {
@@ -261,7 +544,7 @@ class XrayVpnService : VpnService() {
 
             coreController = Libv2ray.newCoreController(callback)
             
-            thread(start = true, name = "XrayThread") {
+            val t = thread(start = true, name = "XrayThread") {
                 try {
                     LogManager.addLog("[Service] Starting Xray core...")
                     coreController?.startLoop(configJson, fd)
@@ -273,6 +556,7 @@ class XrayVpnService : VpnService() {
                     Log.d(TAG, "Core loop finished")
                 }
             }
+            xrayThread = t
             
             _isRunning.value = true
         } catch (e: Exception) {
@@ -326,13 +610,26 @@ class XrayVpnService : VpnService() {
         }
     }
 
+    @Volatile
+    private var xrayThread: Thread? = null
+
     private fun stopCoreLocked() {
         try {
-            coreController?.stopLoop()
+            val controller = coreController
+            if (controller != null) {
+                LogManager.addLog("[Service] Stopping Xray core instance...")
+                controller.stopLoop()
+                coreController = null
+            }
+            xrayThread?.let {
+                try {
+                    it.join(300)
+                } catch (_: Exception) {}
+            }
+            xrayThread = null
         } catch (e: Exception) {
             Log.e(TAG, "Error stopping core loop", e)
         }
-        coreController = null
     }
 
     private fun closeVpnInterfaceLocked() {
@@ -345,6 +642,14 @@ class XrayVpnService : VpnService() {
     }
 
     private fun stopVpn() {
+        isUserStopped = true
+        lastVpnParams = null
+        lastRawConfig = ""
+        activeConfigJson = null
+        networkUpdateJob?.cancel()
+        networkUpdateJob = null
+        unregisterNetworkCallback()
+
         serviceScope.launch {
             withContext(Dispatchers.IO) {
                 lifecycleLock.withLock {
@@ -434,6 +739,14 @@ class XrayVpnService : VpnService() {
 
     override fun onDestroy() {
         LogManager.addLog("[Service] VPN Service destroyed")
+        isUserStopped = true
+        lastVpnParams = null
+        lastRawConfig = ""
+        activeConfigJson = null
+        networkUpdateJob?.cancel()
+        networkUpdateJob = null
+        unregisterNetworkCallback()
+
         lifecycleLock.withLock {
             stopCoreLocked()
             closeVpnInterfaceLocked()

@@ -6,19 +6,37 @@ import com.google.gson.annotations.SerializedName
 object XrayConfigBuild {
     private val gson = GsonBuilder().setPrettyPrinting().create()
 
-    fun buildFullConfig(proxyOutbound: Outbound<*>, mtu: Int = 9000): String {
-        val config = XrayFullConfig(
-            log = Log(loglevel = "warning"),
-            dns = Dns(
-                queryStrategy = "UseIPv4",
-                servers = listOf(
+    fun buildFullConfig(
+        proxyOutbound: Outbound<*>,
+        mtu: Int = 9000,
+        dnsConfig: CustomDnsConfig = CustomDnsConfig.default(),
+        routingConfig: CustomRoutingConfig = CustomRoutingConfig.default()
+    ): String {
+        val activeDnsServers = dnsConfig.servers
+            .filter { it.enabled && it.address.isNotBlank() }
+            .map { DnsServer(address = it.address) }
+            .ifEmpty {
+                listOf(
                     DnsServer(address = "https://1.1.1.1/dns-query"),
                     DnsServer(address = "https://8.8.8.8/dns-query")
                 )
-            ),
-            routing = Routing(
-                domainStrategy = "AsIs",
-                rules = listOf(
+            }
+
+        val activeRoutingRules = routingConfig.rules
+            .filter { it.enabled }
+            .map { rule ->
+                RoutingRule(
+                    type = "field",
+                    inboundTag = rule.inboundTag.takeIf { it.isNotEmpty() },
+                    port = rule.port.takeIf { it.isNotBlank() },
+                    domain = rule.domains.takeIf { it.isNotEmpty() },
+                    ip = rule.ip.takeIf { it.isNotEmpty() },
+                    protocol = rule.protocols.takeIf { it.isNotEmpty() },
+                    outboundTag = rule.outboundTag
+                )
+            }
+            .ifEmpty {
+                listOf(
                     RoutingRule(
                         type = "field",
                         inboundTag = listOf("tun-in"),
@@ -36,6 +54,17 @@ object XrayConfigBuild {
                         outboundTag = "direct-out"
                     )
                 )
+            }
+
+        val config = XrayFullConfig(
+            log = Log(loglevel = "warning"),
+            dns = Dns(
+                queryStrategy = dnsConfig.queryStrategy.ifBlank { "UseIPv4" },
+                servers = activeDnsServers
+            ),
+            routing = Routing(
+                domainStrategy = routingConfig.domainStrategy.ifBlank { "AsIs" },
+                rules = activeRoutingRules
             ),
             inbounds = listOf(
                 Inbound(
@@ -80,6 +109,8 @@ object XrayConfigBuild {
             is ShareLink.VmessLegacy -> vmessLegacyOutbound(link)
             is ShareLink.Trojan -> trojanOutbound(link)
             is ShareLink.Shadowsocks -> shadowsocksOutbound(link)
+            is ShareLink.Socks -> socksOutbound(link)
+            is ShareLink.Hysteria2 -> hysteria2Outbound(link)
         }
     }
 
@@ -93,9 +124,9 @@ object XrayConfigBuild {
                         port = link.port,
                         users = listOf(
                             VlessUser(
-                                id = link.uuid.toString(),
+                                id = link.uuid,
                                 encryption = link.encryption,
-                                flow = link.flow
+                                flow = link.flow.ifEmpty { null }
                             )
                         )
                     )
@@ -115,7 +146,7 @@ object XrayConfigBuild {
                         port = link.port,
                         users = listOf(
                             VmessUser(
-                                id = link.uuid.toString(),
+                                id = link.uuid,
                                 security = link.encryption,
                                 alterId = 0
                             )
@@ -131,6 +162,20 @@ object XrayConfigBuild {
         val params = mutableMapOf<String, String>()
         link.path?.let { params["path"] = it }
         link.type?.let { params["type"] = it }
+        link.hostName?.let { params["host"] = it }
+        link.alpn?.let { params["alpn"] = it }
+        link.fp?.let { params["fp"] = it }
+        link.sni?.let { params["sni"] = it }
+
+        val net = link.transport.lowercase()
+        if (net == "grpc" || net == "gun") {
+            params["serviceName"] = link.path ?: ""
+            if (link.type?.lowercase() == "multi") {
+                params["mode"] = "multi"
+            }
+            params["type"] = "grpc"
+        }
+
         return Outbound(
             protocol = "vmess",
             settings = VmessOutboundSettings(
@@ -140,7 +185,7 @@ object XrayConfigBuild {
                         port = link.port,
                         users = listOf(
                             VmessUser(
-                                id = link.id.toString(),
+                                id = link.id,
                                 security = link.encryption,
                                 alterId = link.aid
                             )
@@ -148,7 +193,7 @@ object XrayConfigBuild {
                     )
                 )
             ),
-            streamSettings = buildStreamSettings(link.security, link.transport, link.sni ?: link.hostName ?: "", params)
+            streamSettings = buildStreamSettings(link.security, link.transport, link.sni ?: link.hostName ?: link.host, params)
         )
     }
 
@@ -164,7 +209,7 @@ object XrayConfigBuild {
                     )
                 )
             ),
-            streamSettings = buildStreamSettings(link.params["security"] ?: "tls", link.params["type"] ?: "tcp", link.sni, link.params)
+            streamSettings = buildStreamSettings(link.security, link.transport, link.sni, link.params)
         )
     }
 
@@ -181,64 +226,249 @@ object XrayConfigBuild {
                         uot = true
                     )
                 )
+            ),
+            streamSettings = if (link.params.isNotEmpty()) {
+                buildStreamSettings(link.security, link.transport, link.params["sni"] ?: link.host, link.params)
+            } else null
+        )
+    }
+
+    private fun socksOutbound(link: ShareLink.Socks): Outbound<SocksOutboundSettings> {
+        val users = if (!link.user.isNullOrEmpty()) {
+            listOf(SocksUser(user = link.user, pass = link.pass ?: ""))
+        } else null
+
+        return Outbound(
+            protocol = "socks",
+            settings = SocksOutboundSettings(
+                servers = listOf(
+                    SocksServer(
+                        address = link.host,
+                        port = link.port,
+                        users = users
+                    )
+                )
+            ),
+            streamSettings = StreamSettings(
+                sockopt = Sockopt(tcpFastOpen = true, tcpCongestion = "bbr", tcpNoDelay = true)
             )
         )
     }
 
-    private fun buildStreamSettings(security: String, transport: String, sni: String, params: Map<String, String>): StreamSettings {
-        val actualSni = (params["sni"] ?: sni).ifEmpty { linkHost(params) }
+    private fun hysteria2Outbound(link: ShareLink.Hysteria2): Outbound<Hysteria2OutboundSettings> {
+        val insecure = truthy(link.params["insecure"] ?: link.params["allowInsecure"] ?: "0")
+        val sni = link.params["sni"] ?: link.host
+        val pinSHA256 = link.params["pinSHA256"]?.replace(":", "")?.lowercase()
+        val obfs = link.params["obfs"]?.lowercase()
+        val obfsPassword = link.params["obfs-password"] ?: ""
 
-        val realitySettings = if (security == "reality") {
-            RealitySettings(
-                fingerprint = params["fp"] ?: "chrome",
-                serverName = actualSni,
-                publicKey = params["pbk"] ?: "",
-                shortId = params["sid"] ?: ""
+        val finalMask = if (obfs == "salamander") {
+            FinalMask(
+                udp = listOf(
+                    UdpMask(
+                        type = "salamander",
+                        settings = mapOf("password" to obfsPassword)
+                    )
+                )
             )
         } else null
 
-        val tlsSettings = if (security == "tls" || security == "xtls") {
-            TlsSettings(serverName = actualSni)
-        } else null
-
-        val wsSettings = if (transport == "ws") {
-            WsSettings(
-                path = params["path"] ?: "/",
-                headers = mapOf("Host" to (params["host"] ?: actualSni))
+        return Outbound(
+            protocol = "hysteria",
+            settings = Hysteria2OutboundSettings(
+                version = 2,
+                address = link.host,
+                port = link.port
+            ),
+            streamSettings = StreamSettings(
+                network = "hysteria",
+                security = "tls",
+                tlsSettings = TlsSettings(
+                    allowInsecure = insecure,
+                    serverName = sni,
+                    alpn = listOf("h3"),
+                    pinnedPeerCertSha256 = pinSHA256
+                ),
+                hysteriaSettings = HysteriaSettings(version = 2, auth = link.auth),
+                finalmask = finalMask,
+                sockopt = Sockopt(tcpFastOpen = true, tcpCongestion = "bbr", tcpNoDelay = true)
             )
-        } else null
+        )
+    }
 
-        val grpcSettings = if (transport == "grpc") {
-            GrpcSettings(
-                serviceName = params["serviceName"] ?: params["path"] ?: "",
-                multiMode = params["mode"] == "multi"
-            )
-        } else null
-
-        val httpSettings = if (transport == "h2" || transport == "http") {
-            HttpSettings(
-                host = listOf(params["host"] ?: actualSni).filter { it.isNotBlank() },
-                path = params["path"] ?: "/"
-            )
-        } else null
-
-        val network = when (transport) {
-            "tcp", "raw" -> "tcp"
+    private fun buildStreamSettings(
+        security: String,
+        transport: String,
+        sni: String,
+        params: Map<String, String>
+    ): StreamSettings {
+        val rawNet = transport.lowercase()
+        val network = when (rawNet) {
+            "", "tcp", "raw" -> "tcp"
+            "ws", "websocket" -> "ws"
+            "grpc", "gun" -> "grpc"
+            "httpupgrade" -> "httpupgrade"
+            "xhttp", "splithttp" -> "xhttp"
+            "kcp", "mkcp" -> "kcp"
             "h2", "http" -> "h2"
-            else -> transport
+            else -> rawNet
+        }
+
+        val rawSec = security.lowercase()
+        val secMode = when (rawSec) {
+            "", "none" -> "none"
+            "tls", "xtls" -> "tls"
+            "reality" -> "reality"
+            else -> rawSec
+        }
+
+        val hostHeader = params["host"] ?: ""
+        val actualSni = (params["sni"] ?: params["peer"] ?: sni).ifEmpty { hostHeader }
+
+        // ── Transports ──
+        var tcpSettings: TcpSettings? = null
+        var wsSettings: WsSettings? = null
+        var grpcSettings: GrpcSettings? = null
+        var httpupgradeSettings: HttpUpgradeSettings? = null
+        var xhttpSettings: XhttpSettings? = null
+        var kcpSettings: KcpSettings? = null
+        var httpSettings: HttpSettings? = null
+
+        when (network) {
+            "tcp" -> {
+                val headerType = params["headerType"]?.lowercase() ?: "none"
+                if (headerType == "http") {
+                    val pathList = splitCsv(params["path"] ?: "/")
+                    val hostList = splitCsv(hostHeader)
+                    tcpSettings = TcpSettings(
+                        header = TcpHeader(
+                            type = "http",
+                            request = TcpHttpRequest(
+                                path = pathList.ifEmpty { listOf("/") },
+                                headers = if (hostList.isNotEmpty()) mapOf("Host" to hostList) else null
+                            )
+                        )
+                    )
+                }
+            }
+            "ws" -> {
+                val path = params["path"] ?: "/"
+                wsSettings = WsSettings(
+                    path = path,
+                    headers = if (hostHeader.isNotBlank()) mapOf("Host" to hostHeader) else null
+                )
+            }
+            "grpc" -> {
+                val serviceName = params["serviceName"] ?: params["path"] ?: ""
+                val multiMode = params["mode"]?.lowercase() == "multi"
+                val authority = params["authority"]?.takeIf { it.isNotBlank() }
+                grpcSettings = GrpcSettings(
+                    serviceName = serviceName,
+                    multiMode = multiMode,
+                    authority = authority
+                )
+            }
+            "httpupgrade" -> {
+                val path = params["path"] ?: "/"
+                httpupgradeSettings = HttpUpgradeSettings(
+                    path = path,
+                    host = hostHeader.takeIf { it.isNotBlank() }
+                )
+            }
+            "xhttp" -> {
+                val path = params["path"] ?: "/"
+                val mode = params["mode"] ?: "auto"
+                val extraStr = params["extra"]
+                val extraJson = extraStr?.let {
+                    try {
+                        com.google.gson.JsonParser.parseString(it)
+                    } catch (_: Exception) {
+                        null
+                    }
+                }
+                xhttpSettings = XhttpSettings(
+                    path = path,
+                    mode = mode,
+                    host = hostHeader.takeIf { it.isNotBlank() },
+                    extra = extraJson
+                )
+            }
+            "kcp" -> {
+                val headerType = params["headerType"] ?: "none"
+                val seed = params["seed"] ?: params["path"]
+                kcpSettings = KcpSettings(
+                    header = KcpHeader(type = headerType),
+                    seed = seed?.takeIf { it.isNotBlank() }
+                )
+            }
+            "h2", "http" -> {
+                val path = params["path"] ?: "/"
+                val hostList = splitCsv(hostHeader)
+                httpSettings = HttpSettings(
+                    host = hostList,
+                    path = path
+                )
+            }
+        }
+
+        // ── Security ──
+        var tlsSettings: TlsSettings? = null
+        var realitySettings: RealitySettings? = null
+
+        when (secMode) {
+            "tls" -> {
+                val allowInsecure = truthy(params["allowInsecure"] ?: params["insecure"] ?: "0")
+                val alpnList = splitCsv(params["alpn"] ?: "")
+                val fp = params["fp"]?.takeIf { it.isNotBlank() }
+                val pcs = params["pcs"]?.takeIf { it.isNotBlank() }
+                val ech = params["ech"]?.takeIf { it.isNotBlank() }
+                tlsSettings = TlsSettings(
+                    allowInsecure = allowInsecure,
+                    serverName = actualSni,
+                    alpn = alpnList.ifEmpty { null },
+                    fingerprint = fp,
+                    pinnedPeerCertSha256 = pcs,
+                    echConfigList = ech
+                )
+            }
+            "reality" -> {
+                val fp = params["fp"]?.takeIf { it.isNotBlank() } ?: "chrome"
+                val pbk = params["pbk"] ?: ""
+                val sid = params["sid"] ?: ""
+                val spx = params["spx"] ?: ""
+                val pqv = params["pqv"]?.takeIf { it.isNotBlank() }
+                realitySettings = RealitySettings(
+                    fingerprint = fp,
+                    serverName = actualSni,
+                    publicKey = pbk,
+                    shortId = sid,
+                    spiderX = spx,
+                    mldsa65Verify = pqv
+                )
+            }
         }
 
         return StreamSettings(
             network = network,
-            security = if (security == "none") "" else security,
+            security = if (secMode == "none") "" else secMode,
             realitySettings = realitySettings,
             tlsSettings = tlsSettings,
             wsSettings = wsSettings,
             grpcSettings = grpcSettings,
+            httpupgradeSettings = httpupgradeSettings,
+            xhttpSettings = xhttpSettings,
+            kcpSettings = kcpSettings,
+            tcpSettings = tcpSettings,
             httpSettings = httpSettings,
             sockopt = Sockopt(tcpFastOpen = true, tcpCongestion = "bbr", tcpNoDelay = true)
         )
     }
+
+    private fun splitCsv(value: String): List<String> =
+        value.split(",").map { it.trim() }.filter { it.isNotEmpty() }
+
+    private fun truthy(value: String): Boolean =
+        value.trim().lowercase() in setOf("1", "true", "yes", "on")
 
     fun prepareConfigForAndroid(configJson: String): String {
         try {
@@ -268,42 +498,6 @@ object XrayConfigBuild {
                 }
             }
 
-            // Ensure direct DNS IPs (1.1.1.1, 8.8.8.8, etc.) are routed to direct-out so internal DNS queries don't loop into proxy-out
-            if (jsonObject.has("routing") && jsonObject.getAsJsonObject("routing").has("rules")) {
-                val routing = jsonObject.getAsJsonObject("routing")
-                val rules = routing.getAsJsonArray("rules")
-                var hasDnsDirectRule = false
-                for (i in 0 until rules.size()) {
-                    val rule = rules.get(i).asJsonObject
-                    if (rule.has("outboundTag") && rule.get("outboundTag").asString == "direct-out") {
-                        if (rule.has("ip")) {
-                            val ips = rule.getAsJsonArray("ip")
-                            for (j in 0 until ips.size()) {
-                                val ipStr = ips.get(j).asString
-                                if (ipStr == "1.1.1.1" || ipStr == "8.8.8.8") {
-                                    hasDnsDirectRule = true
-                                    break
-                                }
-                            }
-                        }
-                    }
-                }
-
-                if (!hasDnsDirectRule) {
-                    val dnsRule = com.google.gson.JsonObject()
-                    dnsRule.addProperty("type", "field")
-                    val ips = com.google.gson.JsonArray()
-                    ips.add("1.1.1.1")
-                    ips.add("1.0.0.1")
-                    ips.add("8.8.8.8")
-                    ips.add("8.8.4.4")
-                    dnsRule.add("ip", ips)
-                    dnsRule.addProperty("outboundTag", "direct-out")
-                    rules.add(dnsRule)
-                    modified = true
-                }
-            }
-
             if (modified) {
                 return gson.toJson(jsonObject)
             }
@@ -312,7 +506,120 @@ object XrayConfigBuild {
         return configJson
     }
 
-    private fun linkHost(params: Map<String, String>): String = params["host"] ?: ""
+    fun prepareConfigForPing(configJson: String): String {
+        try {
+            val jsonObject = com.google.gson.JsonParser.parseString(configJson).asJsonObject
+            jsonObject.add("inbounds", com.google.gson.JsonArray())
+            return gson.toJson(jsonObject)
+        } catch (_: Exception) {
+            return configJson
+        }
+    }
+
+    fun createWifiBypassConfig(configJson: String): String {
+        try {
+            val jsonObject = com.google.gson.JsonParser.parseString(configJson).asJsonObject
+
+            val outbounds = if (jsonObject.has("outbounds") && jsonObject.get("outbounds").isJsonArray) {
+                jsonObject.getAsJsonArray("outbounds")
+            } else {
+                val array = com.google.gson.JsonArray()
+                jsonObject.add("outbounds", array)
+                array
+            }
+
+            var directIdx = -1
+            for (i in 0 until outbounds.size()) {
+                val outbound = outbounds.get(i).asJsonObject
+                val tag = outbound.get("tag")?.asString
+                val protocol = outbound.get("protocol")?.asString
+                if (tag == "direct-out" || protocol == "freedom") {
+                    directIdx = i
+                    break
+                }
+            }
+
+            val directOutbound = if (directIdx != -1) {
+                outbounds.remove(directIdx).asJsonObject
+            } else {
+                val d = com.google.gson.JsonObject()
+                d.addProperty("tag", "direct-out")
+                d.addProperty("protocol", "freedom")
+                val s = com.google.gson.JsonObject()
+                s.addProperty("domainStrategy", "UseIPv4")
+                d.add("settings", s)
+                d
+            }
+
+            val newOutbounds = com.google.gson.JsonArray()
+            newOutbounds.add(directOutbound)
+            for (i in 0 until outbounds.size()) {
+                newOutbounds.add(outbounds.get(i))
+            }
+            jsonObject.add("outbounds", newOutbounds)
+
+            if (jsonObject.has("dns") && jsonObject.get("dns").isJsonObject) {
+                val dns = jsonObject.getAsJsonObject("dns")
+                if (dns.has("servers") && dns.get("servers").isJsonArray) {
+                    val servers = dns.getAsJsonArray("servers")
+                    val newServers = com.google.gson.JsonArray()
+                    for (i in 0 until servers.size()) {
+                        val server = servers.get(i)
+                        var isFake = false
+                        if (server.isJsonPrimitive && server.asString == "fakedns") {
+                            isFake = true
+                        } else if (server.isJsonObject) {
+                            val addr = server.asJsonObject.get("address")?.asString
+                            if (addr == "fakedns") isFake = true
+                        }
+                        if (!isFake) {
+                            newServers.add(server)
+                        }
+                    }
+                    if (newServers.size() == 0) {
+                        newServers.add("1.1.1.1")
+                        newServers.add("8.8.8.8")
+                    }
+                    dns.add("servers", newServers)
+                }
+            }
+
+            val routing = if (jsonObject.has("routing") && jsonObject.get("routing").isJsonObject) {
+                jsonObject.getAsJsonObject("routing")
+            } else {
+                val r = com.google.gson.JsonObject()
+                jsonObject.add("routing", r)
+                r
+            }
+
+            val rules = if (routing.has("rules") && routing.get("rules").isJsonArray) {
+                routing.getAsJsonArray("rules")
+            } else {
+                val r = com.google.gson.JsonArray()
+                routing.add("rules", r)
+                r
+            }
+
+            val bypassRule = com.google.gson.JsonObject()
+            bypassRule.addProperty("type", "field")
+            bypassRule.addProperty("network", "tcp,udp")
+            val inboundsArray = com.google.gson.JsonArray()
+            inboundsArray.add("tun-in")
+            bypassRule.add("inboundTag", inboundsArray)
+            bypassRule.addProperty("outboundTag", "direct-out")
+
+            val newRules = com.google.gson.JsonArray()
+            newRules.add(bypassRule)
+            for (i in 0 until rules.size()) {
+                newRules.add(rules.get(i))
+            }
+            routing.add("rules", newRules)
+
+            return gson.toJson(jsonObject)
+        } catch (_: Exception) {
+            return configJson
+        }
+    }
 }
 
 // region Data Classes
@@ -411,7 +718,7 @@ data class VlessVnext(
 data class VlessUser(
     val id: String,
     val encryption: String = "none",
-    val flow: String = ""
+    val flow: String? = null
 )
 
 // VMess
@@ -455,6 +762,43 @@ data class ShadowsocksServer(
     val uot: Boolean = true
 )
 
+// SOCKS
+data class SocksOutboundSettings(
+    val servers: List<SocksServer>
+)
+
+data class SocksServer(
+    val address: String,
+    val port: Int,
+    val users: List<SocksUser>? = null
+)
+
+data class SocksUser(
+    val user: String,
+    val pass: String
+)
+
+// Hysteria 2
+data class Hysteria2OutboundSettings(
+    val version: Int = 2,
+    val address: String,
+    val port: Int
+)
+
+data class HysteriaSettings(
+    val version: Int = 2,
+    val auth: String = ""
+)
+
+data class FinalMask(
+    val udp: List<UdpMask>? = null
+)
+
+data class UdpMask(
+    val type: String,
+    val settings: Map<String, Any>? = null
+)
+
 // Stream Settings
 data class StreamSettings(
     val network: String = "tcp",
@@ -463,8 +807,28 @@ data class StreamSettings(
     val tlsSettings: TlsSettings? = null,
     val wsSettings: WsSettings? = null,
     val grpcSettings: GrpcSettings? = null,
+    val httpupgradeSettings: HttpUpgradeSettings? = null,
+    val xhttpSettings: XhttpSettings? = null,
+    val kcpSettings: KcpSettings? = null,
+    val tcpSettings: TcpSettings? = null,
     val httpSettings: HttpSettings? = null,
+    val hysteriaSettings: HysteriaSettings? = null,
+    val finalmask: FinalMask? = null,
     val sockopt: Sockopt? = null
+)
+
+data class TcpSettings(
+    val header: TcpHeader? = null
+)
+
+data class TcpHeader(
+    val type: String = "none",
+    val request: TcpHttpRequest? = null
+)
+
+data class TcpHttpRequest(
+    val path: List<String>? = null,
+    val headers: Map<String, List<String>>? = null
 )
 
 data class RealitySettings(
@@ -472,22 +836,49 @@ data class RealitySettings(
     val serverName: String = "",
     val publicKey: String = "",
     val shortId: String = "",
-    val spiderX: String = ""
+    val spiderX: String = "",
+    val mldsa65Verify: String? = null
 )
 
 data class TlsSettings(
     val allowInsecure: Boolean = false,
-    val serverName: String = ""
+    val serverName: String = "",
+    val alpn: List<String>? = null,
+    val fingerprint: String? = null,
+    val pinnedPeerCertSha256: String? = null,
+    val echConfigList: String? = null
 )
 
 data class WsSettings(
     val path: String = "/",
-    val headers: Map<String, String> = emptyMap()
+    val headers: Map<String, String>? = null
 )
 
 data class GrpcSettings(
     val serviceName: String = "",
-    val multiMode: Boolean = false
+    val multiMode: Boolean = false,
+    val authority: String? = null
+)
+
+data class HttpUpgradeSettings(
+    val path: String = "/",
+    val host: String? = null
+)
+
+data class XhttpSettings(
+    val path: String = "/",
+    val mode: String = "auto",
+    val host: String? = null,
+    val extra: Any? = null
+)
+
+data class KcpSettings(
+    val header: KcpHeader? = null,
+    val seed: String? = null
+)
+
+data class KcpHeader(
+    val type: String = "none"
 )
 
 data class HttpSettings(

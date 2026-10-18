@@ -26,7 +26,9 @@ import com.oklookat.spectra.util.TvUtils
 @Composable
 fun SpectraApp(
     viewModel: MainViewModel = hiltViewModel(),
-    onToggleVpn: (Boolean) -> Unit
+    onToggleVpn: (Boolean) -> Unit,
+    onRequestBatteryOptimization: () -> Unit = {},
+    onRequestLocationPermission: () -> Unit = {}
 ) {
     val uiState = viewModel.uiState
     val navController = rememberNavController()
@@ -47,12 +49,16 @@ fun SpectraApp(
     if (isTv) {
         TvAppStructure(
             navController = navController,
-            onToggleVpn = onToggleVpn
+            onToggleVpn = onToggleVpn,
+            onRequestBatteryOptimization = onRequestBatteryOptimization,
+            onRequestLocationPermission = onRequestLocationPermission
         )
     } else {
         MobileAppStructure(
             navController = navController,
-            onToggleVpn = onToggleVpn
+            onToggleVpn = onToggleVpn,
+            onRequestBatteryOptimization = onRequestBatteryOptimization,
+            onRequestLocationPermission = onRequestLocationPermission
         )
     }
 }
@@ -60,7 +66,9 @@ fun SpectraApp(
 @Composable
 private fun MobileAppStructure(
     navController: NavHostController,
-    onToggleVpn: (Boolean) -> Unit
+    onToggleVpn: (Boolean) -> Unit,
+    onRequestBatteryOptimization: () -> Unit,
+    onRequestLocationPermission: () -> Unit
 ) {
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
@@ -92,7 +100,9 @@ private fun MobileAppStructure(
         Box(modifier = Modifier.fillMaxSize().padding(bottom = innerPadding.calculateBottomPadding())) {
             AppNavigation(
                 navController = navController,
-                onToggleVpn = onToggleVpn
+                onToggleVpn = onToggleVpn,
+                onRequestBatteryOptimization = onRequestBatteryOptimization,
+                onRequestLocationPermission = onRequestLocationPermission
             )
         }
     }
@@ -101,7 +111,9 @@ private fun MobileAppStructure(
 @Composable
 private fun TvAppStructure(
     navController: NavHostController,
-    onToggleVpn: (Boolean) -> Unit
+    onToggleVpn: (Boolean) -> Unit,
+    onRequestBatteryOptimization: () -> Unit,
+    onRequestLocationPermission: () -> Unit
 ) {
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
@@ -144,7 +156,9 @@ private fun TvAppStructure(
             Box(modifier = Modifier.fillMaxSize().padding(horizontal = 32.dp)) {
                 AppNavigation(
                     navController = navController,
-                    onToggleVpn = onToggleVpn
+                    onToggleVpn = onToggleVpn,
+                    onRequestBatteryOptimization = onRequestBatteryOptimization,
+                    onRequestLocationPermission = onRequestLocationPermission
                 )
             }
         }
@@ -154,7 +168,9 @@ private fun TvAppStructure(
 @Composable
 private fun AppNavigation(
     navController: NavHostController,
-    onToggleVpn: (Boolean) -> Unit
+    onToggleVpn: (Boolean) -> Unit,
+    onRequestBatteryOptimization: () -> Unit,
+    onRequestLocationPermission: () -> Unit
 ) {
     NavHost(
         navController = navController,
@@ -192,7 +208,19 @@ private fun AppNavigation(
                     settingsViewModel.updateTunnelSettings(addr, dns, addr6, dns6, mtu)
                 },
                 onOpenResources = { navController.navigate(Screen.Resources.route) },
-                onOpenAppFilter = { navController.navigate(Screen.AppFilter.route) }
+                onOpenAppFilter = { navController.navigate(Screen.AppFilter.route) },
+                onOpenWifiExclusions = { navController.navigate(Screen.WifiExclusions.route) },
+                onOpenDnsRouting = { navController.navigate(Screen.DnsRouting.route) },
+                onRequestBatteryOptimization = onRequestBatteryOptimization,
+                onToggleWifiExclusion = { settingsViewModel.toggleWifiExclusion(it) },
+                onAddWifiSsid = { settingsViewModel.addWifiSsid(it) },
+                onRemoveWifiSsid = { settingsViewModel.removeWifiSsid(it) },
+                onRequestLocationPermission = onRequestLocationPermission,
+                onRefreshStatus = {
+                    settingsViewModel.refreshBatteryOptimizationStatus()
+                    settingsViewModel.refreshWifiStatus()
+                },
+                onGetActiveConfig = { settingsViewModel.getActiveConfigJson() }
             )
         }
         composable(Screen.Resources.route) {
@@ -206,6 +234,21 @@ private fun AppNavigation(
             val appFilterViewModel: AppFilterViewModel = hiltViewModel()
             AppFilterScreen(
                 viewModel = appFilterViewModel,
+                onBack = { navController.popBackStack() }
+            )
+        }
+        composable(Screen.WifiExclusions.route) {
+            val wifiExclusionsViewModel: WifiExclusionsViewModel = hiltViewModel()
+            WifiExclusionsScreen(
+                viewModel = wifiExclusionsViewModel,
+                onBack = { navController.popBackStack() },
+                onRequestLocationPermission = onRequestLocationPermission
+            )
+        }
+        composable(Screen.DnsRouting.route) {
+            val dnsRoutingViewModel: DnsRoutingViewModel = hiltViewModel()
+            DnsRoutingScreen(
+                viewModel = dnsRoutingViewModel,
                 onBack = { navController.popBackStack() }
             )
         }

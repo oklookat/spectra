@@ -146,6 +146,30 @@ class MainViewModel @Inject constructor(
         emptySet()
     }
 
+    fun refreshBatteryOptimizationStatus() {
+        viewModelScope.launch {
+            _events.emit(MainUiEvent.ShowToast(messageResId = R.string.preset_updated))
+        }
+    }
+
+    fun refreshWifiStatus() {
+        viewModelScope.launch {
+            _events.emit(MainUiEvent.ShowToast(messageResId = R.string.preset_updated))
+        }
+    }
+
+    fun requestBatteryOptimization() {
+        viewModelScope.launch {
+            _events.emit(MainUiEvent.RequestBatteryOptimization)
+        }
+    }
+
+    fun requestLocationPermission() {
+        viewModelScope.launch {
+            _events.emit(MainUiEvent.RequestLocationPermission)
+        }
+    }
+
     fun checkDeepLinkStatus() {
         uiState = uiState.copy(isDeepLinkVerified = checkDeepLinkStatusUseCase())
     }
