@@ -1,11 +1,13 @@
 package com.oklookat.spectra.model
 
+import androidx.annotation.Keep
 import java.net.URLDecoder
 import java.util.Base64
 
 /**
  * Proxy node data model matching Python/v2rayNG specification.
  */
+@Keep
 data class ProxyNode(
     var protocol: String = "",
     var remarks: String = "",
@@ -276,6 +278,7 @@ data class ProxyNode(
 /**
  * Represents a parsed sharing link (VLESS, VMess, Trojan, Shadowsocks, SOCKS, Hysteria2).
  */
+@Keep
 sealed class ShareLink {
     abstract val host: String
     abstract val port: Int

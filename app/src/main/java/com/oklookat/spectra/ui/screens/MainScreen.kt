@@ -2,8 +2,11 @@ package com.oklookat.spectra.ui.screens
 
 import android.content.res.Configuration
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.MarqueeAnimationMode
+import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.*
@@ -12,6 +15,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.PowerSettingsNew
+import androidx.compose.material.icons.filled.Public
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -28,6 +32,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.oklookat.spectra.BuildConfig
 import com.oklookat.spectra.R
+import com.oklookat.spectra.model.Profile
 import com.oklookat.spectra.ui.components.LinkItem
 import com.oklookat.spectra.ui.theme.SpectraTheme
 import com.oklookat.spectra.ui.viewmodel.HomeUiState
@@ -38,7 +43,8 @@ import libv2ray.Libv2ray
 @Composable
 fun MainScreen(
     uiState: HomeUiState,
-    onToggleVpn: (Boolean) -> Unit
+    onToggleVpn: (Boolean) -> Unit,
+    onOpenProfiles: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val isTv = TvUtils.isTv(context)
@@ -48,7 +54,8 @@ fun MainScreen(
     } else {
         MobileMainScreen(
             uiState = uiState,
-            onToggleVpn = onToggleVpn
+            onToggleVpn = onToggleVpn,
+            onOpenProfiles = onOpenProfiles
         )
     }
 }
@@ -57,7 +64,8 @@ fun MainScreen(
 @Composable
 private fun MobileMainScreen(
     uiState: HomeUiState,
-    onToggleVpn: (Boolean) -> Unit
+    onToggleVpn: (Boolean) -> Unit,
+    onOpenProfiles: () -> Unit = {}
 ) {
     val haptic = LocalHapticFeedback.current
     val configuration = LocalConfiguration.current
@@ -128,11 +136,111 @@ private fun MobileMainScreen(
                     },
                     modifier = Modifier.size(240.dp)
                 )
+                
+                Spacer(modifier = Modifier.height(32.dp))
+
+                val activeProfile = uiState.profiles.find { it.id == uiState.selectedProfileId }
+                val activeGroup = uiState.groups.find { it.id == activeProfile?.groupId }
+
+                ActiveProfileCard(
+                    profile = activeProfile,
+                    groupName = activeGroup?.name,
+                    isVpnEnabled = uiState.isVpnEnabled,
+                    onClick = onOpenProfiles
+                )
 
                 Spacer(modifier = Modifier.weight(1f))
 
                 AppVersionInfo()
                 Spacer(modifier = Modifier.height(24.dp))
+            }
+        }
+    }
+}
+
+@Composable
+private fun ActiveProfileCard(
+    profile: Profile?,
+    groupName: String?,
+    isVpnEnabled: Boolean,
+    onClick: () -> Unit = {}
+) {
+    OutlinedCard(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 32.dp)
+            .clickable(onClick = onClick)
+            .animateContentSize(),
+        shape = MaterialTheme.shapes.extraLarge,
+        border = BorderStroke(
+            1.dp,
+            if (isVpnEnabled) MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)
+            else MaterialTheme.colorScheme.outlineVariant
+        ),
+        colors = CardDefaults.outlinedCardColors(
+            containerColor = if (isVpnEnabled) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.1f)
+            else MaterialTheme.colorScheme.surface
+        )
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Surface(
+                shape = CircleShape,
+                color = if (isVpnEnabled) MaterialTheme.colorScheme.primaryContainer
+                else MaterialTheme.colorScheme.secondaryContainer,
+                modifier = Modifier.size(48.dp)
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(
+                        imageVector = Icons.Default.Public,
+                        contentDescription = null,
+                        tint = if (isVpnEnabled) MaterialTheme.colorScheme.primary
+                        else MaterialTheme.colorScheme.onSecondaryContainer
+                    )
+                }
+            }
+            
+            Spacer(modifier = Modifier.width(16.dp))
+            
+            Column(modifier = Modifier.weight(1f)) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Text(
+                        text = if (isVpnEnabled) stringResource(R.string.notification_content_active) else stringResource(R.string.disconnected),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = if (isVpnEnabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    if (!groupName.isNullOrBlank()) {
+                        Text(
+                            text = "•",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                        )
+                        Text(
+                            text = groupName,
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                        )
+                    }
+                }
+                Text(
+                    text = profile?.name ?: stringResource(R.string.no_profile_selected),
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1,
+                    modifier = Modifier.basicMarquee(
+                        animationMode = MarqueeAnimationMode.Immediately
+                    )
+                )
             }
         }
     }

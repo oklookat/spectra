@@ -26,11 +26,14 @@
     <!-- Главный экран -->
     <string name="disable_vpn">Отключить VPN</string>
     <string name="enable_vpn">Включить VPN</string>
+    <string name="disconnected">Отключено</string>
+    <string name="no_profile_selected">Профиль не выбран</string>
 
     <!-- Экран профилей -->
     <string name="selected_count">Выбрано: %1$d</string>
     <string name="add_profile">Добавить профиль</string>
     <string name="no_profiles_yet">Профилей пока нет</string>
+    <string name="add_new_profile_prompt">Добавьте новый профиль или группу, чтобы начать.</string>
     <string name="refresh_all_remote">Обновить всё</string>
     <string name="import_from_file">Из файла</string>
     <string name="manual_local">Вручную</string>
@@ -53,6 +56,7 @@
     <string name="add_group">Добавить группу</string>
     <string name="delete_group">Удалить группу</string>
     <string name="share_group">Поделиться группой (P2P)</string>
+    <string name="privacy_mode">Конфиденциальность</string>
     <string name="share_source_url">Поделиться URL</string>
     <string name="url_optional_remote">URL (необязательно)</string>
     <string name="sort">Сортировка</string>
@@ -113,6 +117,45 @@
     <string name="toggle_pause">Пауза</string>
     <string name="copy_logs">Копировать логи</string>
     <string name="clear_logs">Очистить логи</string>
+    <string name="log_settings">Настройки логов</string>
+    <string name="log_level">Уровень</string>
+    <string name="log_level_warning">Предупреждения</string>
+    <string name="log_level_info">Информация</string>
+    <string name="log_level_debug">Отладка</string>
+    <string name="log_level_error">Только ошибки</string>
+    <string name="log_level_none">Отключено</string>
+    <string name="dns_log">DNS</string>
+    <string name="dns_log_desc">Записывать детали DNS-запросов</string>
+    <string name="mask_address">Маскировка IP-адресов</string>
+    <string name="mask_address_disabled">Выкл</string>
+    <string name="mask_address_quarter">Частичная (1.2.*.*)</string>
+    <string name="mask_address_half">Средняя (1.*.*.*)</string>
+    <string name="mask_address_full">Полная ([IP скрыт])</string>
+    <string name="log_settings_vpn_active_notice">VPN активен. Для применения настроек служба будет перезапущена.</string>
+    <string name="log_settings_vpn_inactive_notice">Настройки сохранены и применятся при следующем включении VPN.</string>
+    <string name="apply_and_restart">Применить и перезапустить</string>
+    <string name="status_live">Активно</string>
+    <string name="status_paused">На паузе</string>
+    <string name="resume_logs">Возобновить</string>
+    <string name="pause_logs">Пауза</string>
+    <string name="log_level_debug_desc">Максимальная детализация для отладки и поиска проблем</string>
+    <string name="log_level_info_desc">Основная информация о работе и статусе системы</string>
+    <string name="log_level_warning_desc">Предупреждения и ошибки (рекомендуется)</string>
+    <string name="log_level_error_desc">Записывать только сбои и критические ошибки</string>
+    <string name="log_level_none_desc">Запись логов полностью отключена</string>
+    <string name="no_logs_found">Логи не найдены</string>
+    <string name="no_logs_recorded">Записи логов пока отсутствуют</string>
+    <string name="filter_all">All</string>
+    <string name="filter_error">Error</string>
+    <string name="filter_warning">Warning</string>
+    <string name="filter_info">Info</string>
+    <string name="filter_debug">Debug</string>
+    <string name="logs_copied">Логи скопированы в буфер обмена</string>
+    <string name="logs_cleared">Логи очищены</string>
+    <string name="log_level_desc_header">Минимальный уровень важности логов движка</string>
+    <string name="mask_address_desc_header">Скрывать IP-адреса клиентов в логах</string>
+    <string name="logging_paused_banner">Запись логов на паузе. Новые события не отображаются.</string>
+    <string name="log_copied_single">Строка лога скопирована в буфер обмена</string>
 
     <!-- Диалоги и инфо -->
     <string name="vpn_permission_denied">В доступе к VPN отказано</string>
@@ -186,6 +229,11 @@
     <string name="battery_opt_dialog_desc">Чтобы VPN работала стабильно в фоновом режиме, разрешите приложению игнорировать оптимизацию батареи.</string>
     <string name="grant_permission">Разрешить</string>
 
+    <!-- TUN Mode & SOCKS -->
+    <string name="tun_mode">Режим TUN</string>
+    <string name="tun_mode_desc">Маршрутизировать весь трафик устройства через виртуальный интерфейс TUN</string>
+    <string name="socks_port">Порт SOCKS Inbound</string>
+
     <!-- Исключения Wi-Fi -->
     <string name="wifi_exclusions">Исключения Wi-Fi сетей</string>
     <string name="wifi_exclusions_desc">Пускать весь трафик в обход VPN при подключении к определенным Wi-Fi сетям</string>
@@ -195,7 +243,7 @@
     <string name="wifi_ssid_placeholder">Например: Home_WiFi</string>
     <string name="no_wifi_ssids">Нет добавленных исключений Wi-Fi сетей</string>
     <string name="location_permission_title">Требуется доступ к геолокации</string>
-    <string name="location_permission_desc">Системе Android требуется доступ к точной геолокации для определения имени текущей Wi-Fi сети.</string>
+    <string name="location_permission_desc">Android требуется фоновый доступ к геолокации (\"Разрешить в любом режиме\") для определения текущей Wi-Fi сети.</string>
     <string name="wifi_added">Сеть Wi-Fi \'%1$s\' добавлена в исключения</string>
     <string name="wifi_removed">Сеть Wi-Fi \'%1$s\' удалена из исключений</string>
 

@@ -14,6 +14,18 @@ class PrepareVpnConfigUseCase @Inject constructor(
         val profileId = settings.selectedProfileId ?: return ""
         val profile = profileRepository.getProfiles().find { it.id == profileId } ?: return ""
         
-        return profileRepository.getProfileContent(profile) ?: ""
+        val content = profileRepository.getProfileContent(profile) ?: ""
+        return if (content.isNotEmpty()) {
+            com.oklookat.spectra.model.XrayConfigBuild.prepareConfigForAndroid(
+                content,
+                settings.isTunModeEnabled,
+                settings.socksPort,
+                settings.logLevel,
+                settings.dnsLog,
+                settings.maskAddress
+            )
+        } else {
+            ""
+        }
     }
 }

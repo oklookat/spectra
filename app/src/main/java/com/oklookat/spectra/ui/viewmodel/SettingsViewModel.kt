@@ -9,6 +9,7 @@ import androidx.compose.runtime.setValue
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.oklookat.spectra.R
+import com.oklookat.spectra.data.repository.SettingsRepository
 import com.oklookat.spectra.data.repository.WifiExclusionRepository
 import com.oklookat.spectra.domain.usecase.settings.GetSettingsUseCase
 import com.oklookat.spectra.domain.usecase.settings.SetIpv6EnabledUseCase
@@ -20,6 +21,7 @@ import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.first
 import javax.inject.Inject
 
 import com.oklookat.spectra.data.repository.ProfileRepository
@@ -31,7 +33,8 @@ class SettingsViewModel @Inject constructor(
     private val setIpv6EnabledUseCase: SetIpv6EnabledUseCase,
     private val setVpnSettingsUseCase: SetVpnSettingsUseCase,
     private val wifiExclusionRepository: WifiExclusionRepository,
-    private val profileRepository: ProfileRepository
+    private val profileRepository: ProfileRepository,
+    private val settingsRepository: SettingsRepository
 ) : AndroidViewModel(application) {
 
     var uiState by mutableStateOf(SettingsState())
@@ -63,6 +66,8 @@ class SettingsViewModel @Inject constructor(
                 vpnAddressIpv6 = settings.vpnAddressIpv6,
                 vpnDnsIpv6 = settings.vpnDnsIpv6,
                 vpnMtu = settings.vpnMtu,
+                isTunModeEnabled = settings.isTunModeEnabled,
+                socksPort = settings.socksPort,
                 isWifiExclusionEnabled = isWifiExclusionEnabled,
                 excludedWifiSsids = excludedSsids,
                 currentWifiSsid = currentSsid,
@@ -103,6 +108,18 @@ class SettingsViewModel @Inject constructor(
         }
     }
 
+    fun toggleTunMode(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsRepository.setTunModeEnabled(enabled)
+        }
+    }
+
+    fun updateSocksPort(port: Int) {
+        viewModelScope.launch {
+            settingsRepository.setSocksPort(port)
+        }
+    }
+
     fun toggleWifiExclusion(enabled: Boolean) {
         viewModelScope.launch {
             wifiExclusionRepository.setWifiExclusionEnabled(enabled)
@@ -128,21 +145,36 @@ class SettingsViewModel @Inject constructor(
         }
     }
 
-    fun getActiveConfigJson(): String {
+    fun getActiveConfigJson(onResult: (String) -> Unit) {
         val runningConfig = XrayVpnService.activeConfigJson
-        if (!runningConfig.isNullOrBlank()) return runningConfig
+        if (!runningConfig.isNullOrBlank()) {
+            onResult(runningConfig)
+            return
+        }
 
-        val selectedProfileId = profileRepository.getSelectedProfileId()
-        if (selectedProfileId != null) {
-            val profiles = kotlinx.coroutines.runBlocking { profileRepository.getProfiles() }
-            val profile = profiles.find { it.id == selectedProfileId }
-            if (profile != null) {
-                val content = profileRepository.getProfileContent(profile)
-                if (!content.isNullOrBlank()) {
-                    return com.oklookat.spectra.model.XrayConfigBuild.prepareConfigForAndroid(content)
+        viewModelScope.launch {
+            val selectedProfileId = profileRepository.getSelectedProfileId()
+            if (selectedProfileId != null) {
+                val profiles = profileRepository.getProfiles()
+                val profile = profiles.find { it.id == selectedProfileId }
+                if (profile != null) {
+                    val content = profileRepository.getProfileContent(profile)
+                    if (!content.isNullOrBlank()) {
+                        val settings = getSettingsUseCase().first()
+                        val prepared = com.oklookat.spectra.model.XrayConfigBuild.prepareConfigForAndroid(
+                            content,
+                            settings.isTunModeEnabled,
+                            settings.socksPort,
+                            settings.logLevel,
+                            settings.dnsLog,
+                            settings.maskAddress
+                        )
+                        onResult(prepared)
+                        return@launch
+                    }
                 }
             }
+            onResult("")
         }
-        return ""
     }
 }

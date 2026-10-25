@@ -87,6 +87,8 @@ class XrayVpnService : VpnService() {
             vpnAddressIpv6: String,
             vpnDnsIpv6: String,
             vpnMtu: Int,
+            isTunModeEnabled: Boolean,
+            socksPort: Int,
             disallowedPackages: ArrayList<String> = arrayListOf()
         ) {
             val intent = Intent(context, XrayVpnService::class.java).apply {
@@ -98,6 +100,8 @@ class XrayVpnService : VpnService() {
                 putExtra("VPN_ADDRESS_IPV6", vpnAddressIpv6)
                 putExtra("VPN_DNS_IPV6", vpnDnsIpv6)
                 putExtra("VPN_MTU", vpnMtu)
+                putExtra("IS_TUN_MODE_ENABLED", isTunModeEnabled)
+                putExtra("SOCKS_PORT", socksPort)
                 putStringArrayListExtra("DISALLOWED_PACKAGES", disallowedPackages)
             }
             ContextCompat.startForegroundService(context, intent)
@@ -171,41 +175,22 @@ class XrayVpnService : VpnService() {
                 .build()
 
             val callback = try {
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                    object : android.net.ConnectivityManager.NetworkCallback(
-                        android.net.ConnectivityManager.NetworkCallback.FLAG_INCLUDE_LOCATION_INFO
-                    ) {
-                        override fun onAvailable(network: android.net.Network) {
-                            onNetworkStateChanged(network, null)
-                        }
-
-                        override fun onLost(network: android.net.Network) {
-                            onNetworkStateChanged(null, null)
-                        }
-
-                        override fun onCapabilitiesChanged(
-                            network: android.net.Network,
-                            networkCapabilities: android.net.NetworkCapabilities
-                        ) {
-                            onNetworkStateChanged(network, networkCapabilities)
-                        }
+                object : android.net.ConnectivityManager.NetworkCallback(
+                    android.net.ConnectivityManager.NetworkCallback.FLAG_INCLUDE_LOCATION_INFO
+                ) {
+                    override fun onAvailable(network: android.net.Network) {
+                        onNetworkStateChanged(network, null)
                     }
-                } else {
-                    object : android.net.ConnectivityManager.NetworkCallback() {
-                        override fun onAvailable(network: android.net.Network) {
-                            onNetworkStateChanged(network, null)
-                        }
 
-                        override fun onLost(network: android.net.Network) {
-                            onNetworkStateChanged(null, null)
-                        }
+                    override fun onLost(network: android.net.Network) {
+                        onNetworkStateChanged(null, null)
+                    }
 
-                        override fun onCapabilitiesChanged(
-                            network: android.net.Network,
-                            networkCapabilities: android.net.NetworkCapabilities
-                        ) {
-                            onNetworkStateChanged(network, networkCapabilities)
-                        }
+                    override fun onCapabilitiesChanged(
+                        network: android.net.Network,
+                        networkCapabilities: android.net.NetworkCapabilities
+                    ) {
+                        onNetworkStateChanged(network, networkCapabilities)
                     }
                 }
             } catch (e: SecurityException) {
@@ -236,30 +221,30 @@ class XrayVpnService : VpnService() {
     private fun getPhysicalActiveNetwork(networkHint: android.net.Network? = null): android.net.Network? {
         val cm = getSystemService(Context.CONNECTIVITY_SERVICE) as? android.net.ConnectivityManager ?: return null
 
-        // 1. Prioritize Wi-Fi if available in physical networks
+        // 1. If networkHint is provided and has INTERNET and NOT_VPN, just use it
+        if (networkHint != null) {
+            val caps = cm.getNetworkCapabilities(networkHint)
+            if (caps != null && caps.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_NOT_VPN) &&
+                caps.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_INTERNET)) {
+                return networkHint
+            }
+        }
+
+        // 2. Otherwise find any physical network with Wi-Fi first, then Cellular
         for (net in cm.allNetworks) {
             val caps = cm.getNetworkCapabilities(net) ?: continue
             if (caps.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_NOT_VPN) &&
+                caps.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_INTERNET) &&
                 caps.hasTransport(android.net.NetworkCapabilities.TRANSPORT_WIFI)
             ) {
                 return net
             }
         }
 
-        // 2. If no Wi-Fi, check networkHint for Cellular
-        if (networkHint != null) {
-            val caps = cm.getNetworkCapabilities(networkHint)
-            if (caps != null && caps.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_NOT_VPN) &&
-                caps.hasTransport(android.net.NetworkCapabilities.TRANSPORT_CELLULAR)
-            ) {
-                return networkHint
-            }
-        }
-
-        // 3. Otherwise find any physical Cellular network
         for (net in cm.allNetworks) {
             val caps = cm.getNetworkCapabilities(net) ?: continue
             if (caps.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_NOT_VPN) &&
+                caps.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_INTERNET) &&
                 caps.hasTransport(android.net.NetworkCapabilities.TRANSPORT_CELLULAR)
             ) {
                 return net
@@ -271,9 +256,8 @@ class XrayVpnService : VpnService() {
 
     private fun updateUnderlyingNetwork(network: android.net.Network?) {
         try {
-            val physicalNetwork = getPhysicalActiveNetwork(network)
-            if (physicalNetwork != null) {
-                setUnderlyingNetworks(arrayOf(physicalNetwork))
+            if (network != null) {
+                setUnderlyingNetworks(arrayOf(network))
             } else {
                 setUnderlyingNetworks(null)
             }
@@ -304,6 +288,9 @@ class XrayVpnService : VpnService() {
         if (isUserStopped || !_isRunning.value) return
 
         val cm = getSystemService(Context.CONNECTIVITY_SERVICE) as? android.net.ConnectivityManager
+        
+        // If network is null (lost), we want to use the fallback logic to find another active network
+        // If a new network is provided, getPhysicalActiveNetwork will prioritize it if valid
         val activePhysicalNetwork = getPhysicalActiveNetwork(network)
 
         updateUnderlyingNetwork(activePhysicalNetwork)
@@ -411,7 +398,15 @@ class XrayVpnService : VpnService() {
             val rawConfig = configJson.ifEmpty {
                 withContext(Dispatchers.IO) { loadConfigFromAssets() }
             }
-            val preparedConfig = com.oklookat.spectra.model.XrayConfigBuild.prepareConfigForAndroid(rawConfig)
+            // Configuration is already prepared in the viewmodel/usecase when sent via intent.
+            // If it came from assets (default config), we should prepare it.
+            val preparedConfig = if (configJson.isEmpty()) {
+                val isTunModeEnabled = intent?.getBooleanExtra("IS_TUN_MODE_ENABLED", true) ?: true
+                val socksPort = intent?.getIntExtra("SOCKS_PORT", 10808) ?: 10808
+                com.oklookat.spectra.model.XrayConfigBuild.prepareConfigForAndroid(rawConfig, isTunModeEnabled, socksPort)
+            } else {
+                rawConfig
+            }
 
             if (preparedConfig.isEmpty()) {
                 Log.e(TAG, "No config found, stopping service")
@@ -704,15 +699,13 @@ class XrayVpnService : VpnService() {
     }
 
     private fun createNotificationChannel() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val channel = NotificationChannel(
-                NOTIFICATION_CHANNEL_ID,
-                getString(R.string.notification_channel_name),
-                NotificationManager.IMPORTANCE_LOW
-            )
-            val manager = getSystemService(NotificationManager::class.java)
-            manager?.createNotificationChannel(channel)
-        }
+        val channel = NotificationChannel(
+            NOTIFICATION_CHANNEL_ID,
+            getString(R.string.notification_channel_name),
+            NotificationManager.IMPORTANCE_LOW
+        )
+        val manager = getSystemService(NotificationManager::class.java)
+        manager?.createNotificationChannel(channel)
     }
 
     private fun generateRandom32ByteKey(): String {

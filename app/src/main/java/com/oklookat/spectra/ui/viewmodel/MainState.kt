@@ -18,6 +18,8 @@ data class SettingsState(
     val vpnAddressIpv6: String = "",
     val vpnDnsIpv6: String = "",
     val vpnMtu: Int = 9000,
+    val isTunModeEnabled: Boolean = true,
+    val socksPort: Int = 10808,
     val isWifiExclusionEnabled: Boolean = false,
     val excludedWifiSsids: Set<String> = emptySet(),
     val currentWifiSsid: String? = null,

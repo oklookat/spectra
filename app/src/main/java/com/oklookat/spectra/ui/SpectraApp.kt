@@ -28,7 +28,8 @@ fun SpectraApp(
     viewModel: MainViewModel = hiltViewModel(),
     onToggleVpn: (Boolean) -> Unit,
     onRequestBatteryOptimization: () -> Unit = {},
-    onRequestLocationPermission: () -> Unit = {}
+    onRequestLocationPermission: () -> Unit = {},
+    onRequestDeepLinkSettings: () -> Unit = {}
 ) {
     val uiState = viewModel.uiState
     val navController = rememberNavController()
@@ -51,14 +52,16 @@ fun SpectraApp(
             navController = navController,
             onToggleVpn = onToggleVpn,
             onRequestBatteryOptimization = onRequestBatteryOptimization,
-            onRequestLocationPermission = onRequestLocationPermission
+            onRequestLocationPermission = onRequestLocationPermission,
+            onRequestDeepLinkSettings = onRequestDeepLinkSettings
         )
     } else {
         MobileAppStructure(
             navController = navController,
             onToggleVpn = onToggleVpn,
             onRequestBatteryOptimization = onRequestBatteryOptimization,
-            onRequestLocationPermission = onRequestLocationPermission
+            onRequestLocationPermission = onRequestLocationPermission,
+            onRequestDeepLinkSettings = onRequestDeepLinkSettings
         )
     }
 }
@@ -68,7 +71,8 @@ private fun MobileAppStructure(
     navController: NavHostController,
     onToggleVpn: (Boolean) -> Unit,
     onRequestBatteryOptimization: () -> Unit,
-    onRequestLocationPermission: () -> Unit
+    onRequestLocationPermission: () -> Unit,
+    onRequestDeepLinkSettings: () -> Unit
 ) {
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
@@ -102,7 +106,8 @@ private fun MobileAppStructure(
                 navController = navController,
                 onToggleVpn = onToggleVpn,
                 onRequestBatteryOptimization = onRequestBatteryOptimization,
-                onRequestLocationPermission = onRequestLocationPermission
+                onRequestLocationPermission = onRequestLocationPermission,
+                onRequestDeepLinkSettings = onRequestDeepLinkSettings
             )
         }
     }
@@ -113,7 +118,8 @@ private fun TvAppStructure(
     navController: NavHostController,
     onToggleVpn: (Boolean) -> Unit,
     onRequestBatteryOptimization: () -> Unit,
-    onRequestLocationPermission: () -> Unit
+    onRequestLocationPermission: () -> Unit,
+    onRequestDeepLinkSettings: () -> Unit
 ) {
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
@@ -158,7 +164,8 @@ private fun TvAppStructure(
                     navController = navController,
                     onToggleVpn = onToggleVpn,
                     onRequestBatteryOptimization = onRequestBatteryOptimization,
-                    onRequestLocationPermission = onRequestLocationPermission
+                    onRequestLocationPermission = onRequestLocationPermission,
+                    onRequestDeepLinkSettings = onRequestDeepLinkSettings
                 )
             }
         }
@@ -170,7 +177,8 @@ private fun AppNavigation(
     navController: NavHostController,
     onToggleVpn: (Boolean) -> Unit,
     onRequestBatteryOptimization: () -> Unit,
-    onRequestLocationPermission: () -> Unit
+    onRequestLocationPermission: () -> Unit,
+    onRequestDeepLinkSettings: () -> Unit
 ) {
     NavHost(
         navController = navController,
@@ -182,7 +190,14 @@ private fun AppNavigation(
             val homeViewModel: HomeViewModel = hiltViewModel()
             MainScreen(
                 uiState = homeViewModel.uiState,
-                onToggleVpn = onToggleVpn
+                onToggleVpn = onToggleVpn,
+                onOpenProfiles = {
+                    navController.navigate(Screen.Profiles.route) {
+                        popUpTo(Screen.Main.route) { saveState = true }
+                        launchSingleTop = true
+                        restoreState = true
+                    }
+                }
             )
         }
         composable(Screen.Profiles.route) {
@@ -190,7 +205,9 @@ private fun AppNavigation(
             ProfilesScreen(viewModel = profilesViewModel)
         }
         composable(Screen.Logs.route) {
-            LogsScreen()
+            LogsScreen(
+                onRequestRestartVpn = { onToggleVpn(true) }
+            )
         }
         composable(Screen.Settings.route) {
             val settingsViewModel: SettingsViewModel = hiltViewModel()
@@ -204,6 +221,8 @@ private fun AppNavigation(
                 isDeepLinkVerified = profilesViewModel.uiState.isDeepLinkVerified,
                 isTv = isTv,
                 onToggleIpv6 = { settingsViewModel.toggleIpv6(it) },
+                onToggleTunMode = { settingsViewModel.toggleTunMode(it) },
+                onUpdateSocksPort = { settingsViewModel.updateSocksPort(it) },
                 onUpdateTunnel = { addr, dns, addr6, dns6, mtu ->
                     settingsViewModel.updateTunnelSettings(addr, dns, addr6, dns6, mtu)
                 },
@@ -212,6 +231,7 @@ private fun AppNavigation(
                 onOpenWifiExclusions = { navController.navigate(Screen.WifiExclusions.route) },
                 onOpenDnsRouting = { navController.navigate(Screen.DnsRouting.route) },
                 onRequestBatteryOptimization = onRequestBatteryOptimization,
+                onOpenDeepLinkSettings = onRequestDeepLinkSettings,
                 onToggleWifiExclusion = { settingsViewModel.toggleWifiExclusion(it) },
                 onAddWifiSsid = { settingsViewModel.addWifiSsid(it) },
                 onRemoveWifiSsid = { settingsViewModel.removeWifiSsid(it) },
@@ -220,7 +240,7 @@ private fun AppNavigation(
                     settingsViewModel.refreshBatteryOptimizationStatus()
                     settingsViewModel.refreshWifiStatus()
                 },
-                onGetActiveConfig = { settingsViewModel.getActiveConfigJson() }
+                onGetActiveConfig = { callback -> settingsViewModel.getActiveConfigJson(callback) }
             )
         }
         composable(Screen.Resources.route) {

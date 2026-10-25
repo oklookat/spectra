@@ -65,7 +65,7 @@ fun WifiExclusionsScreen(
         viewModel.events.collect { event ->
             when (event) {
                 is MainUiEvent.ShowToast -> {
-                    val message = event.messageResId?.let { context.getString(it, *event.formatArgs.toTypedArray()) }
+                    val message = event.messageResId?.let { context.applicationContext.getString(it, *event.formatArgs.toTypedArray()) }
                         ?: event.message ?: ""
                     snackbarHostState.showSnackbar(message)
                 }
@@ -78,6 +78,7 @@ fun WifiExclusionsScreen(
     var primaryDnsText by remember(uiState.bypassDnsPrimary) { mutableStateOf(uiState.bypassDnsPrimary) }
     var secondaryDnsText by remember(uiState.bypassDnsSecondary) { mutableStateOf(uiState.bypassDnsSecondary) }
     var showEditBypassJsonDialog by remember { mutableStateOf(false) }
+    var bypassConfigJson by remember { mutableStateOf("") }
 
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
@@ -277,11 +278,21 @@ fun WifiExclusionsScreen(
                 supportingContent = { Text(stringResource(R.string.custom_wifi_bypass_config_desc)) },
                 leadingContent = { Icon(Icons.Default.Code, contentDescription = null) },
                 trailingContent = {
-                    Button(onClick = { showEditBypassJsonDialog = true }) {
+                    Button(onClick = { 
+                        viewModel.getActiveBypassConfigJson { json ->
+                            bypassConfigJson = json
+                            showEditBypassJsonDialog = true 
+                        }
+                    }) {
                         Text(stringResource(R.string.configure))
                     }
                 },
-                onClick = { showEditBypassJsonDialog = true },
+                onClick = { 
+                    viewModel.getActiveBypassConfigJson { json ->
+                        bypassConfigJson = json
+                        showEditBypassJsonDialog = true 
+                    }
+                },
                 isTv = isTv
             )
 
@@ -298,7 +309,7 @@ fun WifiExclusionsScreen(
 
     if (showEditBypassJsonDialog) {
         EditBypassConfigDialog(
-            initialConfigJson = viewModel.getActiveBypassConfigJson(),
+            initialConfigJson = bypassConfigJson,
             onDismiss = { showEditBypassJsonDialog = false },
             onSave = { json ->
                 viewModel.saveCustomBypassConfigJson(json)
@@ -350,7 +361,7 @@ private fun EditBypassConfigDialog(
             Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                 IconButton(onClick = {
                     clipboardManager.setText(AnnotatedString(jsonText))
-                    Toast.makeText(context, context.getString(R.string.config_copied), Toast.LENGTH_SHORT).show()
+                    Toast.makeText(context, context.applicationContext.getString(R.string.config_copied), Toast.LENGTH_SHORT).show()
                 }) {
                     Icon(Icons.Default.ContentCopy, contentDescription = null)
                 }

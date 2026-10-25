@@ -161,7 +161,9 @@ fun ProfilesScreen(
                 onDeleteGroup = { viewModel.deleteGroup(selectedGroup!!.id) },
                 onPingAll = { viewModel.measureAllPings(selectedGroup?.id) },
                 onShowSortMenu = { showSortMenu = true },
-                onAddProfileClick = { showMenu = true }
+                onAddProfileClick = { showMenu = true },
+                isPrivacyModeEnabled = uiState.isPrivacyModeEnabled,
+                onTogglePrivacyMode = { viewModel.togglePrivacyMode(it) }
             )
         },
         floatingActionButton = {
@@ -191,11 +193,30 @@ fun ProfilesScreen(
                 ProfileSort.BY_NAME_ASC -> baseList.sortedBy { it.name.lowercase() }
                 ProfileSort.BY_NAME_DESC -> baseList.sortedByDescending { it.name.lowercase() }
                 ProfileSort.BY_PING_ASC -> baseList.sortedWith(compareBy<Profile> { 
-                    if (it.lastPing < 0) Long.MAX_VALUE else it.lastPing 
+                    if (it.lastPing <= 0) Long.MAX_VALUE else it.lastPing 
                 }.thenBy { it.name.lowercase() })
                 ProfileSort.BY_PING_DESC -> baseList.sortedWith(compareByDescending<Profile> { 
-                    if (it.lastPing < 0) -1L else it.lastPing 
+                    if (it.lastPing <= 0) -1L else it.lastPing 
                 }.thenBy { it.name.lowercase() })
+            }
+        }
+
+        var scrollToActiveProfileDone by remember { mutableStateOf(false) }
+
+        LaunchedEffect(filteredProfiles, uiState.selectedProfileId) {
+            val selectedId = uiState.selectedProfileId
+            if (!scrollToActiveProfileDone && selectedId != null && filteredProfiles.isNotEmpty()) {
+                val targetIndex = filteredProfiles.indexOfFirst { it.id == selectedId }
+                if (targetIndex >= 0) {
+                    if (isTv) {
+                        gridState.scrollToItem(targetIndex)
+                    } else {
+                        listState.scrollToItem(targetIndex)
+                    }
+                    scrollToActiveProfileDone = true
+                } else if (selectedGroupIndex != 0) {
+                    selectedGroupIndex = 0
+                }
             }
         }
 
@@ -237,7 +258,7 @@ fun ProfilesScreen(
                             color = MaterialTheme.colorScheme.onSurface
                         )
                         Text(
-                            "Add a new profile or group to get started.",
+                            stringResource(R.string.add_new_profile_prompt),
                             style = MaterialTheme.typography.bodyMedium,
                             textAlign = TextAlign.Center,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -263,11 +284,17 @@ fun ProfilesScreen(
                         verticalArrangement = Arrangement.spacedBy(16.dp)
                     ) {
                         items(items = filteredProfiles, key = { it.id }) { profile ->
+                            val groupName = remember(profile.groupId, uiState.groups) {
+                                uiState.groups.find { it.id == profile.groupId }?.name
+                            }
                             ProfileItem(
                                 profile = profile,
                                 isSelectedForDeletion = selectedIds.contains(profile.id),
                                 isActive = uiState.selectedProfileId == profile.id,
                                 isTv = true,
+                                profileContent = viewModel.getProfileContent(profile),
+                                isPrivacyModeEnabled = uiState.isPrivacyModeEnabled,
+                                groupName = groupName,
                                 onLongClick = {
                                     if (!isSelectionMode) selectedIds = setOf(profile.id)
                                 },
@@ -318,11 +345,17 @@ fun ProfilesScreen(
                         verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
                         items(items = filteredProfiles, key = { it.id }) { profile ->
+                            val groupName = remember(profile.groupId, uiState.groups) {
+                                uiState.groups.find { it.id == profile.groupId }?.name
+                            }
                             ProfileItem(
                                 profile = profile,
                                 isSelectedForDeletion = selectedIds.contains(profile.id),
                                 isActive = uiState.selectedProfileId == profile.id,
                                 isTv = false,
+                                profileContent = viewModel.getProfileContent(profile),
+                                isPrivacyModeEnabled = uiState.isPrivacyModeEnabled,
+                                groupName = groupName,
                                 onLongClick = {
                                     if (!isSelectionMode) selectedIds = setOf(profile.id)
                                 },

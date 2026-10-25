@@ -324,7 +324,7 @@ fun CameraPreview(onQrScanned: (url: String, token: String) -> Unit) {
                                     val rawValue = barcode.rawValue ?: continue
                                     if (rawValue.startsWith("spectra://p2p")) {
                                         val url = rawValue.substringAfter("url=").substringBefore("&")
-                                        val token = rawValue.substringAfter("token=")
+                                        val token = rawValue.substringAfter("token=").substringBefore("&")
                                         onQrScanned(url, token)
                                     }
                                 }

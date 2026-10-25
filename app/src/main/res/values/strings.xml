@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name" translatable="false">Spectra</string>
     
@@ -26,11 +26,14 @@
     <!-- Main Screen -->
     <string name="disable_vpn">Disable VPN</string>
     <string name="enable_vpn">Enable VPN</string>
+    <string name="disconnected">Disconnected</string>
+    <string name="no_profile_selected">No Profile Selected</string>
 
     <!-- Profiles Screen -->
     <string name="selected_count">%1$d selected</string>
     <string name="add_profile">Add Profile</string>
     <string name="no_profiles_yet">No profiles yet</string>
+    <string name="add_new_profile_prompt">Add a new profile or group to get started.</string>
     <string name="refresh_all_remote">Refresh All</string>
     <string name="import_from_file">From File</string>
     <string name="manual_local">Manual</string>
@@ -53,6 +56,7 @@
     <string name="add_group">Add Group</string>
     <string name="delete_group">Delete Group</string>
     <string name="share_group">Share Group (P2P)</string>
+    <string name="privacy_mode">Confidential</string>
     <string name="share_source_url">Share Source URL</string>
     <string name="url_optional_remote">URL (optional)</string>
     <string name="sort">Sort</string>
@@ -64,8 +68,8 @@
     <string name="name_already_exists">Name already exists</string>
     <string name="invalid_url">Invalid URL</string>
     <string name="min_15_min">Min 15 min</string>
-    <string name="local_profile">Local</string>
-    <string name="remote_profile">Remote</string>
+    <string name="local_profile" translatable="false">Local</string>
+    <string name="remote_profile" translatable="false">Remote</string>
 
     <!-- Settings Screen -->
     <string name="connection">Connection</string>
@@ -115,6 +119,45 @@
     <string name="toggle_pause">Pause</string>
     <string name="copy_logs">Copy Logs</string>
     <string name="clear_logs">Clear Logs</string>
+    <string name="log_settings">Log Settings</string>
+    <string name="log_level">Level</string>
+    <string name="log_level_warning">Warning</string>
+    <string name="log_level_info">Info</string>
+    <string name="log_level_debug">Debug</string>
+    <string name="log_level_error">Errors only</string>
+    <string name="log_level_none">Disabled</string>
+    <string name="dns_log">DNS</string>
+    <string name="dns_log_desc">Record detailed DNS query logs</string>
+    <string name="mask_address">IP Masking</string>
+    <string name="mask_address_disabled">Off</string>
+    <string name="mask_address_quarter">Quarter (1.2.*.*)</string>
+    <string name="mask_address_half">Half (1.*.*.*)</string>
+    <string name="mask_address_full">Full ([IP hidden])</string>
+    <string name="log_settings_vpn_active_notice">VPN is active. Applying will restart the service to update logs.</string>
+    <string name="log_settings_vpn_inactive_notice">Settings saved and will apply on next VPN launch.</string>
+    <string name="apply_and_restart">Apply &amp; Restart</string>
+    <string name="status_live">Active</string>
+    <string name="status_paused">Paused</string>
+    <string name="resume_logs">Resume</string>
+    <string name="pause_logs">Pause</string>
+    <string name="log_level_debug_desc">Maximum details for debugging and troubleshooting</string>
+    <string name="log_level_info_desc">General operational and status information</string>
+    <string name="log_level_warning_desc">Warnings and errors (recommended)</string>
+    <string name="log_level_error_desc">Critical errors and operational failures only</string>
+    <string name="log_level_none_desc">Logging completely disabled</string>
+    <string name="no_logs_found">No matching logs found</string>
+    <string name="no_logs_recorded">No logs recorded yet</string>
+    <string name="filter_all">All</string>
+    <string name="filter_error">Error</string>
+    <string name="filter_warning">Warning</string>
+    <string name="filter_info">Info</string>
+    <string name="filter_debug">Debug</string>
+    <string name="logs_copied">Logs copied to clipboard</string>
+    <string name="logs_cleared">Logs cleared</string>
+    <string name="log_level_desc_header">Select minimum severity level for engine logs</string>
+    <string name="mask_address_desc_header">Hide client IP addresses in log outputs</string>
+    <string name="logging_paused_banner">Logging is paused. New events are not displayed.</string>
+    <string name="log_copied_single">Log entry copied to clipboard</string>
 
     <!-- Dialogs & Info -->
     <string name="vpn_permission_denied">VPN permission denied</string>
@@ -188,6 +231,11 @@
     <string name="battery_opt_dialog_desc">To keep the VPN service running stably in the background, please grant permission to ignore battery optimizations.</string>
     <string name="grant_permission">Allow</string>
 
+    <!-- TUN Mode & SOCKS -->
+    <string name="tun_mode">TUN Mode</string>
+    <string name="tun_mode_desc">Route all device traffic through TUN virtual network interface</string>
+    <string name="socks_port">SOCKS Inbound Port</string>
+
     <!-- Wi-Fi Exclusions -->
     <string name="wifi_exclusions">Wi-Fi Exclusions</string>
     <string name="wifi_exclusions_desc">Bypass VPN on specific Wi-Fi networks</string>
@@ -197,7 +245,7 @@
     <string name="wifi_ssid_placeholder">e.g. Home_WiFi</string>
     <string name="no_wifi_ssids">No excluded Wi-Fi networks added yet</string>
     <string name="location_permission_title">Location Permission Required</string>
-    <string name="location_permission_desc">Android requires Location permission to detect the current Wi-Fi SSID name.</string>
+    <string name="location_permission_desc">Android requires Location permission (Allow all the time) to detect the current Wi-Fi SSID name in the background.</string>
     <string name="wifi_added">Wi-Fi \'%1$s\' added to exclusions</string>
     <string name="wifi_removed">Wi-Fi \'%1$s\' removed from exclusions</string>
 

@@ -124,7 +124,9 @@ class WifiExclusionsViewModel @Inject constructor(
         }
     }
 
-    fun getActiveBypassConfigJson(): String {
-        return wifiExclusionRepository.getActiveBypassConfigJson()
+    fun getActiveBypassConfigJson(onResult: (String) -> Unit) {
+        viewModelScope.launch {
+            onResult(wifiExclusionRepository.getActiveBypassConfigJson())
+        }
     }
 }

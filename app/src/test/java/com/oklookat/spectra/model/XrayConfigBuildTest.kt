@@ -1,5 +1,6 @@
 package com.oklookat.spectra.model
 
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.util.UUID
@@ -291,5 +292,30 @@ class XrayConfigBuildTest {
         assertTrue(fullConfig.contains("geosite:ru"))
         assertTrue(fullConfig.contains("geosite:category-ads-all"))
         assertTrue(fullConfig.contains("\"outboundTag\": \"block-out\""))
+    }
+
+    @Test
+    fun testGlobalLogSettingsOverride() {
+        val rawConfig = """
+        {
+            "log": {
+                "loglevel": "info",
+                "dnsLog": true,
+                "maskAddress": "full"
+            },
+            "inbounds": []
+        }
+        """.trimIndent()
+
+        val prepared = XrayConfigBuild.prepareConfigForAndroid(
+            configJson = rawConfig,
+            logLevel = "none",
+            dnsLog = false,
+            maskAddress = ""
+        )
+
+        assertTrue(prepared.contains("\"loglevel\": \"none\""))
+        assertTrue(prepared.contains("\"dnsLog\": false"))
+        assertFalse(prepared.contains("\"maskAddress\""))
     }
 }

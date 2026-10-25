@@ -41,7 +41,8 @@ class ProfilesViewModel @Inject constructor(
     private val deleteProfilesUseCase: DeleteProfilesUseCase,
     private val saveLocalProfileUseCase: SaveLocalProfileUseCase,
     private val setSelectedProfileIdUseCase: SetSelectedProfileIdUseCase,
-    private val profileRepository: ProfileRepository
+    private val profileRepository: ProfileRepository,
+    private val settingsRepository: com.oklookat.spectra.data.repository.SettingsRepository
 ) : AndroidViewModel(application) {
 
     var uiState by mutableStateOf(ProfilesUiState())
@@ -82,7 +83,10 @@ class ProfilesViewModel @Inject constructor(
 
         getSettingsUseCase()
             .onEach { settings ->
-                uiState = uiState.copy(selectedProfileId = settings.selectedProfileId)
+                uiState = uiState.copy(
+                    selectedProfileId = settings.selectedProfileId,
+                    isPrivacyModeEnabled = settings.isPrivacyModeEnabled
+                )
             }
             .launchIn(viewModelScope)
     }
@@ -90,6 +94,12 @@ class ProfilesViewModel @Inject constructor(
     fun selectProfile(id: String?) {
         viewModelScope.launch {
             setSelectedProfileIdUseCase(id)
+        }
+    }
+
+    fun togglePrivacyMode(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsRepository.setPrivacyMode(enabled)
         }
     }
 

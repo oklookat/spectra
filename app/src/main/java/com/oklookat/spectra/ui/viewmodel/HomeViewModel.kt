@@ -5,6 +5,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.oklookat.spectra.domain.usecase.profile.GetGroupsUseCase
 import com.oklookat.spectra.domain.usecase.profile.GetProfileContentUseCase
 import com.oklookat.spectra.domain.usecase.profile.GetProfilesUseCase
 import com.oklookat.spectra.domain.usecase.settings.GetSettingsUseCase
@@ -20,6 +21,7 @@ import javax.inject.Inject
 @HiltViewModel
 class HomeViewModel @Inject constructor(
     private val getProfilesUseCase: GetProfilesUseCase,
+    private val getGroupsUseCase: GetGroupsUseCase,
     private val getSettingsUseCase: GetSettingsUseCase,
     private val setSelectedProfileIdUseCase: SetSelectedProfileIdUseCase,
     private val getProfileContentUseCase: GetProfileContentUseCase
@@ -36,13 +38,15 @@ class HomeViewModel @Inject constructor(
             }
             .launchIn(viewModelScope)
 
-        // Combine profiles and settings
+        // Combine profiles, groups and settings
         combine(
             getProfilesUseCase(),
+            getGroupsUseCase(),
             getSettingsUseCase()
-        ) { profiles, settings ->
+        ) { profiles, groups, settings ->
             uiState = uiState.copy(
                 profiles = profiles,
+                groups = groups,
                 selectedProfileId = settings.selectedProfileId
             )
         }.launchIn(viewModelScope)

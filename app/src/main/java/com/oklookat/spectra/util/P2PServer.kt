@@ -72,19 +72,25 @@ class P2PServer(
             val addresses = mutableListOf<Pair<String, String>>()
             
             for (networkInterface in interfaces) {
+                val name = networkInterface.name.lowercase()
+                if (networkInterface.isLoopback || !networkInterface.isUp) continue
+                if (name.contains("tun") || name.contains("ppp") || name.contains("dummy") || name.contains("v4-") || name.contains("rmnet")) continue
+
                 val inetAddresses = networkInterface.inetAddresses.toList()
                 for (address in inetAddresses) {
                     if (!address.isLoopbackAddress && address is Inet4Address) {
                         val host = address.hostAddress
-                        if (host != null) {
+                        if (host != null && host != "127.0.0.1" && host != "10.0.0.1") {
                             addresses.add(networkInterface.name to host)
-                            Log.d(TAG, "Found IP: ${networkInterface.name} -> $host")
+                            Log.d(TAG, "Found local IP: ${networkInterface.name} -> $host")
                         }
                     }
                 }
             }
 
-            return addresses.find { it.first.contains("wlan") }?.second
+            return addresses.find { it.first.lowercase().contains("wlan") }?.second
+                ?: addresses.find { it.first.lowercase().contains("eth") }?.second
+                ?: addresses.find { it.first.lowercase().contains("ap") }?.second
                 ?: addresses.find { !it.second.startsWith("10.0.2.") }?.second
                 ?: addresses.firstOrNull()?.second
                 

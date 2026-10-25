@@ -6,8 +6,8 @@ import android.content.Context
 import android.content.Intent
 import android.content.ServiceConnection
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.net.VpnService
-import android.os.Build
 import android.os.Bundle
 import android.os.IBinder
 import android.os.PowerManager
@@ -86,7 +86,8 @@ class MainActivity : ComponentActivity() {
                         if (enabled) tryStartVpn() else stopVpnService()
                     },
                     onRequestBatteryOptimization = { requestBatteryOptimization() },
-                    onRequestLocationPermission = { requestLocationPermission() }
+                    onRequestLocationPermission = { requestLocationPermission() },
+                    onRequestDeepLinkSettings = { openDeepLinkSettings() }
                 )
             }
         }
@@ -119,36 +120,44 @@ class MainActivity : ComponentActivity() {
     }
 
     fun requestBatteryOptimization() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            val powerManager = getSystemService(Context.POWER_SERVICE) as? PowerManager
-            if (powerManager != null && !powerManager.isIgnoringBatteryOptimizations(packageName)) {
-                val intent = Intent(
-                    Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
-                    "package:$packageName".toUri()
-                )
+        val powerManager = getSystemService(Context.POWER_SERVICE) as? PowerManager
+        if (powerManager != null && !powerManager.isIgnoringBatteryOptimizations(packageName)) {
+            val intent = Intent(
+                Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
+                "package:$packageName".toUri()
+            )
+            try {
+                requestBatteryOpt.launch(intent)
+            } catch (_: Exception) {
+                val fallbackIntent = Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)
                 try {
-                    requestBatteryOpt.launch(intent)
+                    requestBatteryOpt.launch(fallbackIntent)
                 } catch (_: Exception) {
-                    val fallbackIntent = Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)
-                    try {
-                        requestBatteryOpt.launch(fallbackIntent)
-                    } catch (_: Exception) {
-                        Toast.makeText(this, getString(R.string.could_not_open_settings), Toast.LENGTH_SHORT).show()
-                    }
+                    Toast.makeText(this, getString(R.string.could_not_open_settings), Toast.LENGTH_SHORT).show()
                 }
-            } else {
-                Toast.makeText(this, getString(R.string.battery_opt_status_disabled), Toast.LENGTH_SHORT).show()
             }
+        } else {
+            Toast.makeText(this, getString(R.string.battery_opt_status_disabled), Toast.LENGTH_SHORT).show()
         }
     }
 
     fun requestLocationPermission() {
-        requestLocationPerms.launch(
-            arrayOf(
-                Manifest.permission.ACCESS_FINE_LOCATION,
-                Manifest.permission.ACCESS_COARSE_LOCATION
+        if (com.oklookat.spectra.util.PermissionHelper.hasLocationPermission(this)) {
+            if (!com.oklookat.spectra.util.PermissionHelper.hasBackgroundLocationPermission(this)) {
+                try {
+                    requestLocationPerms.launch(arrayOf(Manifest.permission.ACCESS_BACKGROUND_LOCATION))
+                } catch (_: Exception) {
+                    Toast.makeText(this, getString(R.string.could_not_open_settings), Toast.LENGTH_SHORT).show()
+                }
+            }
+        } else {
+            requestLocationPerms.launch(
+                arrayOf(
+                    Manifest.permission.ACCESS_FINE_LOCATION,
+                    Manifest.permission.ACCESS_COARSE_LOCATION
+                )
             )
-        )
+        }
     }
 
     private fun openDeepLinkSettings() {
@@ -157,13 +166,20 @@ class MainActivity : ComponentActivity() {
             return
         }
         
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            val intent = Intent(
-                Settings.ACTION_APP_OPEN_BY_DEFAULT_SETTINGS,
-                "package:$packageName".toUri()
-            )
+        val pkgUri = Uri.fromParts("package", packageName, null)
+        val openByDefaultIntent = Intent(Settings.ACTION_APP_OPEN_BY_DEFAULT_SETTINGS).apply {
+            data = pkgUri
+            putExtra(Settings.EXTRA_APP_PACKAGE, packageName)
+        }
+        val appDetailsIntent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+            data = pkgUri
+        }
+
+        try {
+            startActivity(openByDefaultIntent)
+        } catch (_: Exception) {
             try {
-                startActivity(intent)
+                startActivity(appDetailsIntent)
             } catch (_: Exception) {
                 Toast.makeText(this, getString(R.string.could_not_open_settings), Toast.LENGTH_SHORT).show()
             }
@@ -203,11 +219,9 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun tryStartVpn() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
-                requestNotificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
-                return
-            }
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+            requestNotificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
+            return
         }
 
         val vpnIntent = VpnService.prepare(this)
@@ -236,6 +250,8 @@ class MainActivity : ComponentActivity() {
                 vpnAddressIpv6 = settings.vpnAddressIpv6,
                 vpnDnsIpv6 = settings.vpnDnsIpv6,
                 vpnMtu = settings.vpnMtu,
+                isTunModeEnabled = settings.isTunModeEnabled,
+                socksPort = settings.socksPort,
                 disallowedPackages = ArrayList(disallowedPackages)
             )
             

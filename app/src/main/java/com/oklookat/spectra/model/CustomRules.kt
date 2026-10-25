@@ -1,13 +1,16 @@
 package com.oklookat.spectra.model
 
+import androidx.annotation.Keep
+import com.google.gson.annotations.SerializedName
 import java.util.UUID
 
 /**
  * Configuration model for custom DNS settings in Xray.
  */
+@Keep
 data class CustomDnsConfig(
-    val queryStrategy: String = "UseIPv4",
-    val servers: List<DnsServerConfig> = defaultServers()
+    @SerializedName("queryStrategy") val queryStrategy: String = "UseIPv4",
+    @SerializedName("servers") val servers: List<DnsServerConfig> = defaultServers()
 ) {
     companion object {
         fun defaultServers(): List<DnsServerConfig> = listOf(
@@ -22,18 +25,20 @@ data class CustomDnsConfig(
 /**
  * Individual DNS server configuration.
  */
+@Keep
 data class DnsServerConfig(
-    val id: String = UUID.randomUUID().toString(),
-    val address: String,
-    val enabled: Boolean = true
+    @SerializedName("id") val id: String = UUID.randomUUID().toString(),
+    @SerializedName("address") val address: String,
+    @SerializedName("enabled") val enabled: Boolean = true
 )
 
 /**
  * Configuration model for custom routing rules in Xray.
  */
+@Keep
 data class CustomRoutingConfig(
-    val domainStrategy: String = "AsIs",
-    val rules: List<RoutingRuleConfig> = defaultRules()
+    @SerializedName("domainStrategy") val domainStrategy: String = "AsIs",
+    @SerializedName("rules") val rules: List<RoutingRuleConfig> = defaultRules()
 ) {
     companion object {
         fun defaultRules(): List<RoutingRuleConfig> = listOf(
@@ -68,14 +73,15 @@ data class CustomRoutingConfig(
 /**
  * Individual routing rule configuration.
  */
+@Keep
 data class RoutingRuleConfig(
-    val id: String = UUID.randomUUID().toString(),
-    val name: String = "",
-    val outboundTag: String = "proxy-out", // "proxy-out", "direct-out", "block-out", "dns-out"
-    val domains: List<String> = emptyList(),
-    val ip: List<String> = emptyList(),
-    val port: String = "",
-    val protocols: List<String> = emptyList(),
-    val inboundTag: List<String> = emptyList(),
-    val enabled: Boolean = true
+    @SerializedName("id") val id: String = UUID.randomUUID().toString(),
+    @SerializedName("name") val name: String = "",
+    @SerializedName("outboundTag") val outboundTag: String = "proxy-out", // "proxy-out", "direct-out", "block-out", "dns-out"
+    @SerializedName("domains") val domains: List<String> = emptyList(),
+    @SerializedName("ip") val ip: List<String> = emptyList(),
+    @SerializedName("port") val port: String = "",
+    @SerializedName("protocols") val protocols: List<String> = emptyList(),
+    @SerializedName("inboundTag") val inboundTag: List<String> = emptyList(),
+    @SerializedName("enabled") val enabled: Boolean = true
 )

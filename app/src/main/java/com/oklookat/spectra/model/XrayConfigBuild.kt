@@ -1,5 +1,6 @@
 package com.oklookat.spectra.model
 
+import androidx.annotation.Keep
 import com.google.gson.GsonBuilder
 import com.google.gson.annotations.SerializedName
 
@@ -470,17 +471,111 @@ object XrayConfigBuild {
     private fun truthy(value: String): Boolean =
         value.trim().lowercase() in setOf("1", "true", "yes", "on")
 
-    fun prepareConfigForAndroid(configJson: String): String {
+    fun prepareConfigForAndroid(
+        configJson: String,
+        isTunModeEnabled: Boolean = true,
+        socksPort: Int = 10808,
+        logLevel: String = "warning",
+        dnsLog: Boolean = false,
+        maskAddress: String = ""
+    ): String {
         try {
             val jsonObject = com.google.gson.JsonParser.parseString(configJson).asJsonObject
             var modified = false
+
+            // ── Handle "log" object ──
+            val logObj = if (jsonObject.has("log") && jsonObject.get("log").isJsonObject) {
+                jsonObject.getAsJsonObject("log")
+            } else {
+                val newLog = com.google.gson.JsonObject()
+                jsonObject.add("log", newLog)
+                modified = true
+                newLog
+            }
+
+            // Remove file paths (access, error) as we do not write to files
+            if (logObj.has("access")) {
+                logObj.remove("access")
+                modified = true
+            }
+            if (logObj.has("error")) {
+                logObj.remove("error")
+                modified = true
+            }
+
+            // Override loglevel with global setting if different
+            if (logObj.get("loglevel")?.asString != logLevel) {
+                logObj.addProperty("loglevel", logLevel)
+                modified = true
+            }
+
+            // Override dnsLog with global setting if different
+            if (logObj.get("dnsLog")?.asBoolean != dnsLog) {
+                logObj.addProperty("dnsLog", dnsLog)
+                modified = true
+            }
+
+            // Override maskAddress with global setting if different
+            val currentMask = if (logObj.has("maskAddress")) logObj.get("maskAddress").asString else ""
+            if (maskAddress.isNotBlank()) {
+                if (currentMask != maskAddress) {
+                    logObj.addProperty("maskAddress", maskAddress)
+                    modified = true
+                }
+            } else if (logObj.has("maskAddress")) {
+                logObj.remove("maskAddress")
+                modified = true
+            }
+
+            var hasTun = false
+            var replacedSocksTag: String? = null
 
             if (jsonObject.has("inbounds")) {
                 val inbounds = jsonObject.getAsJsonArray("inbounds")
                 for (i in 0 until inbounds.size()) {
                     val inbound = inbounds.get(i).asJsonObject
                     val protocol = inbound.get("protocol")?.asString
+                    
                     if (protocol == "tun") {
+                        hasTun = true
+                    }
+                    
+                    if (isTunModeEnabled && protocol == "socks") {
+                        val portElement = inbound.get("port")
+                        val port = if (portElement != null && portElement.isJsonPrimitive) portElement.asInt else 0
+                        if (port == socksPort) {
+                            replacedSocksTag = inbound.get("tag")?.asString
+                            
+                            // Remove all old socks settings
+                            inbound.remove("listen")
+                            inbound.remove("port")
+                            
+                            // Replace this inbound with tun
+                            inbound.addProperty("protocol", "tun")
+                            inbound.addProperty("tag", "tun-in")
+                            
+                            val settings = com.google.gson.JsonObject()
+                            settings.addProperty("name", "tun0")
+                            settings.addProperty("mtu", 9000)
+                            
+                            inbound.add("settings", settings)
+                            
+                            // Sniffing
+                            val sniffing = com.google.gson.JsonObject()
+                            sniffing.addProperty("enabled", true)
+                            sniffing.addProperty("routeOnly", true)
+                            val destOverride = com.google.gson.JsonArray()
+                            destOverride.add("http")
+                            destOverride.add("tls")
+                            destOverride.add("quic")
+                            destOverride.add("fakedns")
+                            sniffing.add("destOverride", destOverride)
+                            inbound.add("sniffing", sniffing)
+                            
+                            modified = true
+                            hasTun = true
+                        }
+                    } else if (protocol == "tun") {
                         val settings = if (inbound.has("settings") && inbound.get("settings").isJsonObject) {
                             inbound.getAsJsonObject("settings")
                         } else {
@@ -493,6 +588,87 @@ object XrayConfigBuild {
                         if (!settings.has("name") || settings.get("name").asString.isBlank()) {
                             settings.addProperty("name", "tun0")
                             modified = true
+                        }
+                    }
+                }
+                
+                // If tun mode is enabled but no tun inbound exists, inject one
+                if (isTunModeEnabled && !hasTun) {
+                    val tunInbound = com.google.gson.JsonObject()
+                    tunInbound.addProperty("protocol", "tun")
+                    tunInbound.addProperty("tag", "tun-in")
+                    
+                    val settings = com.google.gson.JsonObject()
+                    settings.addProperty("name", "tun0")
+                    settings.addProperty("mtu", 9000)
+                    tunInbound.add("settings", settings)
+                    
+                    val sniffing = com.google.gson.JsonObject()
+                    sniffing.addProperty("enabled", true)
+                    sniffing.addProperty("routeOnly", true)
+                    val destOverride = com.google.gson.JsonArray()
+                    destOverride.add("http")
+                    destOverride.add("tls")
+                    destOverride.add("quic")
+                    destOverride.add("fakedns")
+                    sniffing.add("destOverride", destOverride)
+                    tunInbound.add("sniffing", sniffing)
+                    
+                    inbounds.add(tunInbound)
+                    modified = true
+                }
+            } else if (isTunModeEnabled) {
+                // If there are no inbounds at all, but tun mode is enabled, add inbounds array with tun
+                val tunInbound = com.google.gson.JsonObject()
+                tunInbound.addProperty("protocol", "tun")
+                tunInbound.addProperty("tag", "tun-in")
+                
+                val settings = com.google.gson.JsonObject()
+                settings.addProperty("name", "tun0")
+                settings.addProperty("mtu", 9000)
+                tunInbound.add("settings", settings)
+                
+                val sniffing = com.google.gson.JsonObject()
+                sniffing.addProperty("enabled", true)
+                sniffing.addProperty("routeOnly", true)
+                val destOverride = com.google.gson.JsonArray()
+                destOverride.add("http")
+                destOverride.add("tls")
+                destOverride.add("quic")
+                destOverride.add("fakedns")
+                sniffing.add("destOverride", destOverride)
+                tunInbound.add("sniffing", sniffing)
+                
+                val inbounds = com.google.gson.JsonArray()
+                inbounds.add(tunInbound)
+                jsonObject.add("inbounds", inbounds)
+                modified = true
+            }
+            
+            if (replacedSocksTag != null && jsonObject.has("routing")) {
+                val routing = jsonObject.get("routing")
+                if (routing.isJsonObject) {
+                    val rules = routing.asJsonObject.get("rules")
+                    if (rules != null && rules.isJsonArray) {
+                        for (i in 0 until rules.asJsonArray.size()) {
+                            val rule = rules.asJsonArray.get(i)
+                            if (rule.isJsonObject) {
+                                val inboundTag = rule.asJsonObject.get("inboundTag")
+                                if (inboundTag != null) {
+                                    if (inboundTag.isJsonArray) {
+                                        val tags = inboundTag.asJsonArray
+                                        for (j in 0 until tags.size()) {
+                                            if (tags.get(j).asString == replacedSocksTag) {
+                                                tags.set(j, com.google.gson.JsonPrimitive("tun-in"))
+                                                modified = true
+                                            }
+                                        }
+                                    } else if (inboundTag.isJsonPrimitive && inboundTag.asString == replacedSocksTag) {
+                                        rule.asJsonObject.addProperty("inboundTag", "tun-in")
+                                        modified = true
+                                    }
+                                }
+                            }
                         }
                     }
                 }
@@ -624,271 +800,314 @@ object XrayConfigBuild {
 
 // region Data Classes
 
+@Keep
 data class XrayFullConfig(
-    val log: Log? = Log(),
-    val dns: Dns? = null,
-    val routing: Routing? = null,
-    val inbounds: List<Inbound>,
-    val outbounds: List<Outbound<*>>
+    @SerializedName("log") val log: Log? = Log(),
+    @SerializedName("dns") val dns: Dns? = null,
+    @SerializedName("routing") val routing: Routing? = null,
+    @SerializedName("inbounds") val inbounds: List<Inbound>,
+    @SerializedName("outbounds") val outbounds: List<Outbound<*>>
 )
 
+@Keep
 data class Log(
-    val loglevel: String = "warning"
+    @SerializedName("loglevel") val loglevel: String = "warning"
 )
 
+@Keep
 data class Dns(
-    val queryStrategy: String = "UseIPv4",
-    val servers: List<DnsServer>
+    @SerializedName("queryStrategy") val queryStrategy: String = "UseIPv4",
+    @SerializedName("servers") val servers: List<DnsServer>
 )
 
+@Keep
 data class DnsServer(
-    val address: String
+    @SerializedName("address") val address: String
 )
 
+@Keep
 data class Routing(
-    val domainStrategy: String = "AsIs",
-    val rules: List<RoutingRule>
+    @SerializedName("domainStrategy") val domainStrategy: String = "AsIs",
+    @SerializedName("rules") val rules: List<RoutingRule>
 )
 
+@Keep
 data class RoutingRule(
-    val type: String? = "field",
-    @SerializedName("inboundTag")
-    val inboundTag: List<String>? = null,
-    val port: String? = null,
-    val domain: List<String>? = null,
-    val ip: List<String>? = null,
-    val protocol: List<String>? = null,
-    val outboundTag: String
+    @SerializedName("type") val type: String? = "field",
+    @SerializedName("inboundTag") val inboundTag: List<String>? = null,
+    @SerializedName("port") val port: String? = null,
+    @SerializedName("domain") val domain: List<String>? = null,
+    @SerializedName("ip") val ip: List<String>? = null,
+    @SerializedName("protocol") val protocol: List<String>? = null,
+    @SerializedName("outboundTag") val outboundTag: String
 )
 
+@Keep
 data class Inbound(
-    val protocol: String,
-    val tag: String? = null,
-    val listen: String? = null,
-    val port: Int? = null,
-    val settings: Any,
-    val sniffing: Sniffing? = null
+    @SerializedName("protocol") val protocol: String,
+    @SerializedName("tag") val tag: String? = null,
+    @SerializedName("listen") val listen: String? = null,
+    @SerializedName("port") val port: Int? = null,
+    @SerializedName("settings") val settings: Any,
+    @SerializedName("sniffing") val sniffing: Sniffing? = null
 )
 
+@Keep
 data class TunSettings(
-    val name: String = "tun0",
-    val mtu: Int = 9000
+    @SerializedName("name") val name: String = "tun0",
+    @SerializedName("mtu") val mtu: Int = 9000
 )
 
+@Keep
 data class Sniffing(
-    val enabled: Boolean = true,
-    @SerializedName("destOverride")
-    val destOverride: List<String> = listOf("http", "tls", "quic")
+    @SerializedName("enabled") val enabled: Boolean = true,
+    @SerializedName("destOverride") val destOverride: List<String> = listOf("http", "tls", "quic")
 )
 
+@Keep
 data class Outbound<T>(
-    val protocol: String,
-    val settings: T,
-    val tag: String? = null,
-    val streamSettings: StreamSettings? = null
+    @SerializedName("protocol") val protocol: String,
+    @SerializedName("settings") val settings: T,
+    @SerializedName("tag") val tag: String? = null,
+    @SerializedName("streamSettings") val streamSettings: StreamSettings? = null
 )
 
+@Keep
 data class FreedomSettings(
-    val targetStrategy: String = "UseIPv4"
+    @SerializedName("targetStrategy") val targetStrategy: String = "UseIPv4"
 )
 
+@Keep
 data class DnsOutboundSettings(
-    val nonIPQuery: String = "skip"
+    @SerializedName("nonIPQuery") val nonIPQuery: String = "skip"
 )
 
+@Keep
 data class BlackholeSettings(
-    val response: BlackholeResponse
+    @SerializedName("response") val response: BlackholeResponse
 )
 
+@Keep
 data class BlackholeResponse(
-    val type: String = "http"
+    @SerializedName("type") val type: String = "http"
 )
 
 // VLESS
+@Keep
 data class VlessOutboundSettings(
-    val vnext: List<VlessVnext>
+    @SerializedName("vnext") val vnext: List<VlessVnext>
 )
 
+@Keep
 data class VlessVnext(
-    val address: String,
-    val port: Int,
-    val users: List<VlessUser>
+    @SerializedName("address") val address: String,
+    @SerializedName("port") val port: Int,
+    @SerializedName("users") val users: List<VlessUser>
 )
 
+@Keep
 data class VlessUser(
-    val id: String,
-    val encryption: String = "none",
-    val flow: String? = null
+    @SerializedName("id") val id: String,
+    @SerializedName("encryption") val encryption: String = "none",
+    @SerializedName("flow") val flow: String? = null
 )
 
 // VMess
+@Keep
 data class VmessOutboundSettings(
-    val vnext: List<VmessVnext>
+    @SerializedName("vnext") val vnext: List<VmessVnext>
 )
 
+@Keep
 data class VmessVnext(
-    val address: String,
-    val port: Int,
-    val users: List<VmessUser>
+    @SerializedName("address") val address: String,
+    @SerializedName("port") val port: Int,
+    @SerializedName("users") val users: List<VmessUser>
 )
 
+@Keep
 data class VmessUser(
-    val id: String,
-    val security: String = "auto",
-    val alterId: Int = 0
+    @SerializedName("id") val id: String,
+    @SerializedName("security") val security: String = "auto",
+    @SerializedName("alterId") val alterId: Int = 0
 )
 
 // Trojan
+@Keep
 data class TrojanOutboundSettings(
-    val servers: List<TrojanServer>
+    @SerializedName("servers") val servers: List<TrojanServer>
 )
 
+@Keep
 data class TrojanServer(
-    val address: String,
-    val port: Int,
-    val password: String
+    @SerializedName("address") val address: String,
+    @SerializedName("port") val port: Int,
+    @SerializedName("password") val password: String
 )
 
 // Shadowsocks
+@Keep
 data class ShadowsocksOutboundSettings(
-    val servers: List<ShadowsocksServer>
+    @SerializedName("servers") val servers: List<ShadowsocksServer>
 )
 
+@Keep
 data class ShadowsocksServer(
-    val address: String,
-    val port: Int,
-    val method: String,
-    val password: String,
-    val uot: Boolean = true
+    @SerializedName("address") val address: String,
+    @SerializedName("port") val port: Int,
+    @SerializedName("method") val method: String,
+    @SerializedName("password") val password: String,
+    @SerializedName("uot") val uot: Boolean = true
 )
 
 // SOCKS
+@Keep
 data class SocksOutboundSettings(
-    val servers: List<SocksServer>
+    @SerializedName("servers") val servers: List<SocksServer>
 )
 
+@Keep
 data class SocksServer(
-    val address: String,
-    val port: Int,
-    val users: List<SocksUser>? = null
+    @SerializedName("address") val address: String,
+    @SerializedName("port") val port: Int,
+    @SerializedName("users") val users: List<SocksUser>? = null
 )
 
+@Keep
 data class SocksUser(
-    val user: String,
-    val pass: String
+    @SerializedName("user") val user: String,
+    @SerializedName("pass") val pass: String
 )
 
 // Hysteria 2
+@Keep
 data class Hysteria2OutboundSettings(
-    val version: Int = 2,
-    val address: String,
-    val port: Int
+    @SerializedName("version") val version: Int = 2,
+    @SerializedName("address") val address: String,
+    @SerializedName("port") val port: Int
 )
 
+@Keep
 data class HysteriaSettings(
-    val version: Int = 2,
-    val auth: String = ""
+    @SerializedName("version") val version: Int = 2,
+    @SerializedName("auth") val auth: String = ""
 )
 
+@Keep
 data class FinalMask(
-    val udp: List<UdpMask>? = null
+    @SerializedName("udp") val udp: List<UdpMask>? = null
 )
 
+@Keep
 data class UdpMask(
-    val type: String,
-    val settings: Map<String, Any>? = null
+    @SerializedName("type") val type: String,
+    @SerializedName("settings") val settings: Map<String, Any>? = null
 )
 
 // Stream Settings
+@Keep
 data class StreamSettings(
-    val network: String = "tcp",
-    val security: String = "",
-    val realitySettings: RealitySettings? = null,
-    val tlsSettings: TlsSettings? = null,
-    val wsSettings: WsSettings? = null,
-    val grpcSettings: GrpcSettings? = null,
-    val httpupgradeSettings: HttpUpgradeSettings? = null,
-    val xhttpSettings: XhttpSettings? = null,
-    val kcpSettings: KcpSettings? = null,
-    val tcpSettings: TcpSettings? = null,
-    val httpSettings: HttpSettings? = null,
-    val hysteriaSettings: HysteriaSettings? = null,
-    val finalmask: FinalMask? = null,
-    val sockopt: Sockopt? = null
+    @SerializedName("network") val network: String = "tcp",
+    @SerializedName("security") val security: String = "",
+    @SerializedName("realitySettings") val realitySettings: RealitySettings? = null,
+    @SerializedName("tlsSettings") val tlsSettings: TlsSettings? = null,
+    @SerializedName("wsSettings") val wsSettings: WsSettings? = null,
+    @SerializedName("grpcSettings") val grpcSettings: GrpcSettings? = null,
+    @SerializedName("httpupgradeSettings") val httpupgradeSettings: HttpUpgradeSettings? = null,
+    @SerializedName("xhttpSettings") val xhttpSettings: XhttpSettings? = null,
+    @SerializedName("kcpSettings") val kcpSettings: KcpSettings? = null,
+    @SerializedName("tcpSettings") val tcpSettings: TcpSettings? = null,
+    @SerializedName("httpSettings") val httpSettings: HttpSettings? = null,
+    @SerializedName("hysteriaSettings") val hysteriaSettings: HysteriaSettings? = null,
+    @SerializedName("finalmask") val finalmask: FinalMask? = null,
+    @SerializedName("sockopt") val sockopt: Sockopt? = null
 )
 
+@Keep
 data class TcpSettings(
-    val header: TcpHeader? = null
+    @SerializedName("header") val header: TcpHeader? = null
 )
 
+@Keep
 data class TcpHeader(
-    val type: String = "none",
-    val request: TcpHttpRequest? = null
+    @SerializedName("type") val type: String = "none",
+    @SerializedName("request") val request: TcpHttpRequest? = null
 )
 
+@Keep
 data class TcpHttpRequest(
-    val path: List<String>? = null,
-    val headers: Map<String, List<String>>? = null
+    @SerializedName("path") val path: List<String>? = null,
+    @SerializedName("headers") val headers: Map<String, List<String>>? = null
 )
 
+@Keep
 data class RealitySettings(
-    val fingerprint: String = "chrome",
-    val serverName: String = "",
-    val publicKey: String = "",
-    val shortId: String = "",
-    val spiderX: String = "",
-    val mldsa65Verify: String? = null
+    @SerializedName("fingerprint") val fingerprint: String = "chrome",
+    @SerializedName("serverName") val serverName: String = "",
+    @SerializedName("publicKey") val publicKey: String = "",
+    @SerializedName("shortId") val shortId: String = "",
+    @SerializedName("spiderX") val spiderX: String = "",
+    @SerializedName("mldsa65Verify") val mldsa65Verify: String? = null
 )
 
+@Keep
 data class TlsSettings(
-    val allowInsecure: Boolean = false,
-    val serverName: String = "",
-    val alpn: List<String>? = null,
-    val fingerprint: String? = null,
-    val pinnedPeerCertSha256: String? = null,
-    val echConfigList: String? = null
+    @SerializedName("allowInsecure") val allowInsecure: Boolean = false,
+    @SerializedName("serverName") val serverName: String = "",
+    @SerializedName("alpn") val alpn: List<String>? = null,
+    @SerializedName("fingerprint") val fingerprint: String? = null,
+    @SerializedName("pinnedPeerCertSha256") val pinnedPeerCertSha256: String? = null,
+    @SerializedName("echConfigList") val echConfigList: String? = null
 )
 
+@Keep
 data class WsSettings(
-    val path: String = "/",
-    val headers: Map<String, String>? = null
+    @SerializedName("path") val path: String = "/",
+    @SerializedName("headers") val headers: Map<String, String>? = null
 )
 
+@Keep
 data class GrpcSettings(
-    val serviceName: String = "",
-    val multiMode: Boolean = false,
-    val authority: String? = null
+    @SerializedName("serviceName") val serviceName: String = "",
+    @SerializedName("multiMode") val multiMode: Boolean = false,
+    @SerializedName("authority") val authority: String? = null
 )
 
+@Keep
 data class HttpUpgradeSettings(
-    val path: String = "/",
-    val host: String? = null
+    @SerializedName("path") val path: String = "/",
+    @SerializedName("host") val host: String? = null
 )
 
+@Keep
 data class XhttpSettings(
-    val path: String = "/",
-    val mode: String = "auto",
-    val host: String? = null,
-    val extra: Any? = null
+    @SerializedName("path") val path: String = "/",
+    @SerializedName("mode") val mode: String = "auto",
+    @SerializedName("host") val host: String? = null,
+    @SerializedName("extra") val extra: Any? = null
 )
 
+@Keep
 data class KcpSettings(
-    val header: KcpHeader? = null,
-    val seed: String? = null
+    @SerializedName("header") val header: KcpHeader? = null,
+    @SerializedName("seed") val seed: String? = null
 )
 
+@Keep
 data class KcpHeader(
-    val type: String = "none"
+    @SerializedName("type") val type: String = "none"
 )
 
+@Keep
 data class HttpSettings(
-    val host: List<String> = emptyList(),
-    val path: String = "/"
+    @SerializedName("host") val host: List<String> = emptyList(),
+    @SerializedName("path") val path: String = "/"
 )
 
+@Keep
 data class Sockopt(
-    val tcpFastOpen: Boolean = true,
-    val tcpCongestion: String = "bbr",
-    val tcpNoDelay: Boolean = true
+    @SerializedName("tcpFastOpen") val tcpFastOpen: Boolean = true,
+    @SerializedName("tcpCongestion") val tcpCongestion: String = "bbr",
+    @SerializedName("tcpNoDelay") val tcpNoDelay: Boolean = true
 )
 // endregion

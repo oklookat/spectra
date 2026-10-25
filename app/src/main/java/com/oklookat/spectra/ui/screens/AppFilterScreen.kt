@@ -51,7 +51,7 @@ fun AppFilterScreen(
         viewModel.events.collect { event ->
             when (event) {
                 is MainUiEvent.ShowToast -> {
-                    val message = event.messageResId?.let { context.getString(it, *event.formatArgs.toTypedArray()) }
+                    val message = event.messageResId?.let { context.applicationContext.getString(it, *event.formatArgs.toTypedArray()) }
                         ?: event.message ?: ""
                     snackbarHostState.showSnackbar(message)
                 }

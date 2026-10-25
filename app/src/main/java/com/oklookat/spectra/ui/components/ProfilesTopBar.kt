@@ -36,7 +36,9 @@ fun ProfilesTopBar(
     onDeleteGroup: () -> Unit,
     onPingAll: () -> Unit,
     onShowSortMenu: () -> Unit,
-    onAddProfileClick: () -> Unit
+    onAddProfileClick: () -> Unit,
+    isPrivacyModeEnabled: Boolean = false,
+    onTogglePrivacyMode: (Boolean) -> Unit = {}
 ) {
     Surface(
         color = MaterialTheme.colorScheme.surface,
@@ -82,6 +84,28 @@ fun ProfilesTopBar(
                                 expanded = onShowGroupMenu,
                                 onDismissRequest = onDismissGroupMenu
                             ) {
+                                DropdownMenuItem(
+                                    text = { Text(stringResource(R.string.privacy_mode)) },
+                                    onClick = {
+                                        onDismissGroupMenu()
+                                        onTogglePrivacyMode(!isPrivacyModeEnabled)
+                                    },
+                                    leadingIcon = {
+                                        Icon(
+                                            imageVector = if (isPrivacyModeEnabled) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                                            contentDescription = null
+                                        )
+                                    },
+                                    trailingIcon = {
+                                        Checkbox(
+                                            checked = isPrivacyModeEnabled,
+                                            onCheckedChange = null
+                                        )
+                                    }
+                                )
+
+                                HorizontalDivider()
+
                                 if (selectedGroup != null) {
                                     DropdownMenuItem(
                                         text = { Text(stringResource(R.string.refresh)) },

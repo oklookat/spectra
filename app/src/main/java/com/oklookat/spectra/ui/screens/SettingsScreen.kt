@@ -36,20 +36,24 @@ fun SettingsScreen(
     isDeepLinkVerified: Boolean,
     isTv: Boolean,
     onToggleIpv6: (Boolean) -> Unit,
+    onToggleTunMode: (Boolean) -> Unit = {},
+    onUpdateSocksPort: (Int) -> Unit = {},
     onUpdateTunnel: (String, String, String, String, Int) -> Unit,
     onOpenResources: () -> Unit,
     onOpenAppFilter: () -> Unit,
     onOpenWifiExclusions: () -> Unit = {},
     onOpenDnsRouting: () -> Unit = {},
     onRequestBatteryOptimization: () -> Unit = {},
+    onOpenDeepLinkSettings: () -> Unit = {},
     onToggleWifiExclusion: (Boolean) -> Unit = {},
     onAddWifiSsid: (String) -> Unit = {},
     onRemoveWifiSsid: (String) -> Unit = {},
     onRequestLocationPermission: () -> Unit = {},
     onRefreshStatus: () -> Unit = {},
-    onGetActiveConfig: () -> String = { "" }
+    onGetActiveConfig: ((String) -> Unit) -> Unit = { it("") }
 ) {
     var showActiveConfigDialog by remember { mutableStateOf(false) }
+    var activeConfigJsonState by remember { mutableStateOf("") }
 
     val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner) {
@@ -231,6 +235,41 @@ fun SettingsScreen(
                             },
                             isTv = isTv
                         )
+                        
+                        HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
+                        
+                        AppListItem(
+                            headlineContent = { Text(stringResource(R.string.tun_mode)) },
+                            supportingContent = { Text(stringResource(R.string.tun_mode_desc)) },
+                            leadingContent = { Icon(Icons.Default.VpnKey, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
+                            trailingContent = {
+                                AppSwitch(
+                                    checked = uiState.isTunModeEnabled,
+                                    onCheckedChange = onToggleTunMode,
+                                    enabled = !isVpnEnabled,
+                                    isTv = isTv
+                                )
+                            },
+                            isTv = isTv
+                        )
+                        
+                        var socksPortText by remember(uiState.socksPort) { mutableStateOf(uiState.socksPort.toString()) }
+                        OutlinedTextField(
+                            value = socksPortText,
+                            onValueChange = { 
+                                socksPortText = it
+                                it.toIntOrNull()?.let { port ->
+                                    onUpdateSocksPort(port)
+                                }
+                            },
+                            label = { Text(stringResource(R.string.socks_port)) },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp, vertical = 8.dp),
+                            enabled = !isVpnEnabled,
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            singleLine = true
+                        )
 
                         HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
 
@@ -306,7 +345,12 @@ fun SettingsScreen(
                             supportingContent = { Text(stringResource(R.string.active_config_desc)) },
                             leadingContent = { Icon(Icons.Default.Code, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
                             trailingContent = { Icon(Icons.AutoMirrored.Filled.NavigateNext, contentDescription = null) },
-                            onClick = { showActiveConfigDialog = true },
+                            onClick = {
+                                onGetActiveConfig { config ->
+                                    activeConfigJsonState = config
+                                    showActiveConfigDialog = true
+                                }
+                            },
                             isTv = isTv
                         )
 
@@ -321,7 +365,9 @@ fun SettingsScreen(
                                     )
                                 },
                                 leadingContent = { Icon(Icons.Default.Link, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
-                                trailingContent = { Icon(Icons.AutoMirrored.Filled.NavigateNext, contentDescription = null) }
+                                trailingContent = { Icon(Icons.AutoMirrored.Filled.NavigateNext, contentDescription = null) },
+                                onClick = onOpenDeepLinkSettings,
+                                isTv = isTv
                             )
                         }
                     }
@@ -334,7 +380,7 @@ fun SettingsScreen(
 
     if (showActiveConfigDialog) {
         ActiveConfigDialog(
-            configJson = onGetActiveConfig(),
+            configJson = activeConfigJsonState,
             onDismiss = { showActiveConfigDialog = false }
         )
     }

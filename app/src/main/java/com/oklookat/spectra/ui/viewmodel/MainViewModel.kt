@@ -47,7 +47,7 @@ class MainViewModel @Inject constructor(
     private val appFilterRepository: AppFilterRepository
 ) : AndroidViewModel(application) {
     private val updateManager = UpdateManager(application)
-    private val p2pClient = P2PClient()
+    private val p2pClient = P2PClient(application)
     private var p2pServer: P2PServer? = null
     
     private val UPDATE_URL = BuildConfig.UPDATE_URL
@@ -59,6 +59,7 @@ class MainViewModel @Inject constructor(
     val events = _events.asSharedFlow()
 
     init {
+        LogManager.initWelcomeLogs(BuildConfig.VERSION_NAME)
         observeData()
         setupAppUpdates()
         

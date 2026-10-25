@@ -1,21 +1,27 @@
-# Add project specific ProGuard rules here.
-# You can control the set of applied configuration files using the
-# proguardFiles setting in build.gradle.
-#
-# For more details, see
-#   http://developer.android.com/guide/developing/tools/proguard.html
+# Project specific ProGuard / R8 rules
 
-# If your project uses WebView with JS, uncomment the following
-# and specify the fully qualified class name to the JavaScript interface
-# class:
-#-keepclassmembers class fqcn.of.javascript.interface.for.webview {
-#   public *;
-#}
+# Keep all models and data classes used for Gson serialization
+-keep class com.oklookat.spectra.model.** { *; }
+-keepclassmembers class com.oklookat.spectra.model.** { *; }
 
-# Uncomment this to preserve the line number information for
-# debugging stack traces.
-#-keepattributes SourceFile,LineNumberTable
+-keep class com.oklookat.spectra.data.** { *; }
+-keepclassmembers class com.oklookat.spectra.data.** { *; }
 
-# If you keep the line number information, uncomment this to
-# hide the original source file name.
-#-renamesourcefileattribute SourceFile
+# Keep androidx @Keep annotated classes and members
+-keep @androidx.annotation.Keep class * { *; }
+-keepclassmembers class * {
+    @androidx.annotation.Keep *;
+}
+
+# Keep Gson attributes and SerializedName fields
+-keepattributes Signature
+-keepattributes *Annotation*
+-keepattributes EnclosingMethod,InnerClasses
+
+-keepclassmembers class * {
+    @com.google.gson.annotations.SerializedName <fields>;
+}
+
+# Keep libv2ray
+-keep class libv2ray.** { *; }
+-keepclassmembers class libv2ray.** { *; }

@@ -14,6 +14,28 @@ object LogManager {
     val logs = mutableStateListOf<String>()
     var isPaused by mutableStateOf(false)
 
+    fun initWelcomeLogs(appVersion: String) {
+        if (logs.isNotEmpty()) return
+
+        val xrayFullVersion = try {
+            libv2ray.Libv2ray.checkVersionX()
+        } catch (_: Throwable) {
+            ""
+        }
+
+        val libVersion = if (xrayFullVersion.contains("Lib v")) {
+            "v" + xrayFullVersion.substringAfter("Lib v").substringBefore(",")
+        } else "N/A"
+
+        val coreVersion = if (xrayFullVersion.contains("core v")) {
+            "v" + xrayFullVersion.substringAfter("core v").substringBefore(")")
+        } else "N/A"
+
+        addLog("Welcome to Spectra! 🚀")
+        addLog("Versions: Spectra v$appVersion | LibXray $libVersion | Xray-core $coreVersion")
+        addLog("Contributors: oklookat & Gemini AI Agent 🤖")
+    }
+
     fun addLog(log: String?) {
         if (log.isNullOrBlank() || isPaused) return
         if (Looper.myLooper() == Looper.getMainLooper()) {

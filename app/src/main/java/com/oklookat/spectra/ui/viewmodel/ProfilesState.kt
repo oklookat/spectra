@@ -21,6 +21,7 @@ data class ProfilesUiState(
     val selectedProfileId: String? = null,
     val sortOrder: ProfileSort = ProfileSort.AS_IS,
     val isRefreshing: Boolean = false,
+    val isPrivacyModeEnabled: Boolean = false,
     
     // Deep Link / Import state
     val deepLinkProfile: PendingProfile? = null,

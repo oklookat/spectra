@@ -19,7 +19,6 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.runBlocking
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -146,12 +145,12 @@ class WifiExclusionRepository @Inject constructor(
         return gson.toJson(configMap)
     }
 
-    fun getActiveBypassConfigJson(): String {
-        val customJson = runBlocking { customBypassConfigJsonFlow.first() }
+    suspend fun getActiveBypassConfigJson(): String {
+        val customJson = customBypassConfigJsonFlow.first()
         if (customJson.isNotBlank()) return customJson
 
-        val primary = runBlocking { bypassDnsPrimaryFlow.first() }
-        val secondary = runBlocking { bypassDnsSecondaryFlow.first() }
+        val primary = bypassDnsPrimaryFlow.first()
+        val secondary = bypassDnsSecondaryFlow.first()
         return buildDefaultWifiBypassConfig(primary, secondary)
     }
 
@@ -263,6 +262,11 @@ class WifiExclusionRepository @Inject constructor(
         val coarse = ContextCompat.checkSelfPermission(
             context, Manifest.permission.ACCESS_COARSE_LOCATION
         ) == PackageManager.PERMISSION_GRANTED
-        return fine || coarse
+        val background = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            ContextCompat.checkSelfPermission(
+                context, Manifest.permission.ACCESS_BACKGROUND_LOCATION
+            ) == PackageManager.PERMISSION_GRANTED
+        } else true
+        return (fine || coarse) && background
     }
 }

@@ -32,6 +32,12 @@ class SettingsRepository @Inject constructor(
         val SELECTED_PROFILE_ID = stringPreferencesKey("selected_profile_id")
         val CUSTOM_DNS_JSON = stringPreferencesKey("custom_dns_json")
         val CUSTOM_ROUTING_JSON = stringPreferencesKey("custom_routing_json")
+        val TUN_MODE_ENABLED = booleanPreferencesKey("tun_mode_enabled")
+        val SOCKS_PORT = intPreferencesKey("socks_port")
+        val LOG_LEVEL = stringPreferencesKey("log_level")
+        val DNS_LOG = booleanPreferencesKey("dns_log")
+        val MASK_ADDRESS = stringPreferencesKey("mask_address")
+        val PRIVACY_MODE = booleanPreferencesKey("privacy_mode")
     }
 
     val settingsFlow: Flow<SettingsData> = context.dataStore.data.map { preferences ->
@@ -57,6 +63,12 @@ class SettingsRepository @Inject constructor(
             vpnDnsIpv6 = preferences[PreferencesKeys.VPN_DNS_IPV6] ?: "fd00::2",
             vpnMtu = preferences[PreferencesKeys.VPN_MTU] ?: 9000,
             selectedProfileId = preferences[PreferencesKeys.SELECTED_PROFILE_ID],
+            isTunModeEnabled = preferences[PreferencesKeys.TUN_MODE_ENABLED] ?: true,
+            socksPort = preferences[PreferencesKeys.SOCKS_PORT] ?: 10808,
+            logLevel = preferences[PreferencesKeys.LOG_LEVEL] ?: "warning",
+            dnsLog = preferences[PreferencesKeys.DNS_LOG] ?: false,
+            maskAddress = preferences[PreferencesKeys.MASK_ADDRESS] ?: "",
+            isPrivacyModeEnabled = preferences[PreferencesKeys.PRIVACY_MODE] ?: false,
             customDnsConfig = dnsConfig,
             customRoutingConfig = routingConfig
         )
@@ -100,6 +112,28 @@ class SettingsRepository @Inject constructor(
         }
     }
 
+    suspend fun setTunModeEnabled(enabled: Boolean) {
+        context.dataStore.edit { it[PreferencesKeys.TUN_MODE_ENABLED] = enabled }
+    }
+
+    suspend fun setSocksPort(port: Int) {
+        context.dataStore.edit { it[PreferencesKeys.SOCKS_PORT] = port }
+    }
+
+    suspend fun setLogSettings(logLevel: String, dnsLog: Boolean, maskAddress: String) {
+        context.dataStore.edit {
+            it[PreferencesKeys.LOG_LEVEL] = logLevel
+            it[PreferencesKeys.DNS_LOG] = dnsLog
+            it[PreferencesKeys.MASK_ADDRESS] = maskAddress
+        }
+    }
+
+    suspend fun setPrivacyMode(enabled: Boolean) {
+        context.dataStore.edit {
+            it[PreferencesKeys.PRIVACY_MODE] = enabled
+        }
+    }
+
     suspend fun getSettingsDataOnce(): SettingsData = settingsFlow.first()
 }
 
@@ -111,6 +145,12 @@ data class SettingsData(
     val vpnDnsIpv6: String,
     val vpnMtu: Int,
     val selectedProfileId: String?,
+    val isTunModeEnabled: Boolean,
+    val socksPort: Int,
+    val logLevel: String = "warning",
+    val dnsLog: Boolean = false,
+    val maskAddress: String = "",
+    val isPrivacyModeEnabled: Boolean = false,
     val customDnsConfig: CustomDnsConfig = CustomDnsConfig.default(),
     val customRoutingConfig: CustomRoutingConfig = CustomRoutingConfig.default()
 )
