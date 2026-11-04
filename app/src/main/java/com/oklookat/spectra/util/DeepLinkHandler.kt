@@ -52,7 +52,7 @@ object DeepLinkHandler {
             val name = params["name"] ?: ""
             val url = params["url"] ?: ""
             val autoUpdate = params["autoupdate"]?.toBoolean() ?: false
-            val interval = params["autoupdateinterval"]?.toIntOrNull() ?: 15
+            val interval = params["autoupdateinterval"]?.toIntOrNull() ?: 1440
 
             if (name.isNotEmpty() && url.isNotEmpty()) {
                 return if (type == "group") {

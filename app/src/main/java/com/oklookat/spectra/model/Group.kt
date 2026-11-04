@@ -12,7 +12,7 @@ data class Group(
     val url: String? = null,
     val isRemote: Boolean = false,
     val autoUpdateEnabled: Boolean = false,
-    val autoUpdateIntervalMinutes: Int = 15,
+    val autoUpdateIntervalMinutes: Int = 1440,
     val lastUpdated: Long = 0
 ) {
     companion object {

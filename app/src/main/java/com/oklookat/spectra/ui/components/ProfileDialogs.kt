@@ -38,7 +38,7 @@ fun GroupDialog(
     var name by remember { mutableStateOf(group?.name ?: "") }
     var url by remember { mutableStateOf(group?.url ?: "") }
     var autoUpdate by remember { mutableStateOf(group?.autoUpdateEnabled ?: false) }
-    var interval by remember { mutableStateOf(group?.autoUpdateIntervalMinutes?.toString() ?: "60") }
+    var interval by remember { mutableStateOf(group?.autoUpdateIntervalMinutes?.toString() ?: "1440") }
 
     fun handleUrlChange(inputUrl: String) {
         if (inputUrl.contains("spectra.local")) {
@@ -159,7 +159,7 @@ fun RemoteProfileDialog(
     var name by remember { mutableStateOf(profile?.name ?: "") }
     var url by remember { mutableStateOf(profile?.url ?: "") }
     var autoUpdate by remember { mutableStateOf(profile?.autoUpdateEnabled ?: false) }
-    var interval by remember { mutableStateOf(profile?.autoUpdateIntervalMinutes?.toString() ?: "60") }
+    var interval by remember { mutableStateOf(profile?.autoUpdateIntervalMinutes?.toString() ?: "1440") }
 
     fun handleUrlChange(inputUrl: String) {
         if (inputUrl.contains("spectra.local")) {

@@ -149,16 +149,29 @@ class XrayVpnService : VpnService() {
 
     private fun observeWifiExclusionSettings() {
         serviceScope.launch {
+            var isFirstEmission = true
+            var lastBypassJson = ""
+            var lastPrimaryDns = ""
+            var lastSecondaryDns = ""
+
             combine(
                 wifiExclusionRepository.isWifiExclusionEnabledFlow,
                 wifiExclusionRepository.excludedSsidsFlow,
                 wifiExclusionRepository.customBypassConfigJsonFlow,
                 wifiExclusionRepository.bypassDnsPrimaryFlow,
                 wifiExclusionRepository.bypassDnsSecondaryFlow
-            ) { _, _, _, _, _ -> Unit }
-                .collect {
+            ) { _, _, customJson, primaryDns, secondaryDns ->
+                val configChanged = !isFirstEmission && 
+                    ((customJson != lastBypassJson) || (primaryDns != lastPrimaryDns) || (secondaryDns != lastSecondaryDns))
+                lastBypassJson = customJson
+                lastPrimaryDns = primaryDns
+                lastSecondaryDns = secondaryDns
+                isFirstEmission = false
+                configChanged
+            }
+                .collect { configChanged ->
                     if (!isUserStopped && _isRunning.value) {
-                        onNetworkStateChanged(currentActiveNetwork, null)
+                        onNetworkStateChanged(currentActiveNetwork, null, configChanged)
                     }
                 }
         }
@@ -283,7 +296,8 @@ class XrayVpnService : VpnService() {
 
     private fun onNetworkStateChanged(
         network: android.net.Network?,
-        networkCapabilities: android.net.NetworkCapabilities? = null
+        networkCapabilities: android.net.NetworkCapabilities? = null,
+        forceConfigUpdate: Boolean = false
     ) {
         if (isUserStopped || !_isRunning.value) return
 
@@ -300,55 +314,68 @@ class XrayVpnService : VpnService() {
         networkUpdateJob = serviceScope.launch(Dispatchers.IO) {
             if (isUserStopped || !_isRunning.value) return@launch
 
-            val params = lastVpnParams ?: return@launch
-            val rawConfig = lastRawConfig.ifEmpty { return@launch }
-
-            val capsToUse = networkCapabilities ?: (activePhysicalNetwork?.let { cm?.getNetworkCapabilities(it) })
-
-            val isWifi = activePhysicalNetwork != null &&
-                    capsToUse?.hasTransport(android.net.NetworkCapabilities.TRANSPORT_WIFI) == true
-
-            var currentSsid = if (isWifi) wifiExclusionRepository.getCurrentWifiSsid(capsToUse) else null
-
-            if (isWifi && currentSsid == null) {
-                for (retry in 1..10) {
-                    kotlinx.coroutines.delay(300)
-                    if (isUserStopped || !_isRunning.value) return@launch
-                    val currentCaps = activePhysicalNetwork?.let { cm?.getNetworkCapabilities(it) } ?: capsToUse
-                    currentSsid = wifiExclusionRepository.getCurrentWifiSsid(currentCaps)
-                    if (currentSsid != null) break
-                }
-            }
-
             val isEnabled = try {
                 wifiExclusionRepository.isWifiExclusionEnabledFlow.first()
             } catch (_: Exception) { false }
 
-            val excludedSsids = try {
-                wifiExclusionRepository.excludedSsidsFlow.first()
-            } catch (_: Exception) { emptySet() }
+            val params = lastVpnParams ?: return@launch
+            val rawConfig = lastRawConfig.ifEmpty { return@launch }
 
-            val targetBypassState = when {
-                !isEnabled -> false
-                !isWifi -> false
-                currentSsid != null -> excludedSsids.contains(currentSsid)
-                else -> isCurrentlyWifiBypassed
-            }
+            val capsToUse = networkCapabilities ?: (activePhysicalNetwork?.let { cm?.getNetworkCapabilities(it) })
+            val isWifi = activePhysicalNetwork != null &&
+                    capsToUse?.hasTransport(android.net.NetworkCapabilities.TRANSPORT_WIFI) == true
 
-            if (isWifi) {
-                LogManager.addLog("[Service] Wi-Fi network active. SSID: '${currentSsid ?: "<unknown>"}' | Exclusion Enabled: $isEnabled | Excluded SSIDs: $excludedSsids -> Target Bypass State: $targetBypassState (Current: $isCurrentlyWifiBypassed)")
+            val targetBypassState: Boolean
+            var currentSsid: String? = null
+            var excludedSsids: Set<String> = emptySet()
+
+            if (isEnabled && isWifi) {
+                currentSsid = wifiExclusionRepository.getCurrentWifiSsid(capsToUse)
+                if (currentSsid == null) {
+                    for (retry in 1..10) {
+                        kotlinx.coroutines.delay(300)
+                        if (isUserStopped || !_isRunning.value) return@launch
+                        val currentCaps = activePhysicalNetwork?.let { cm?.getNetworkCapabilities(it) } ?: capsToUse
+                        currentSsid = wifiExclusionRepository.getCurrentWifiSsid(currentCaps)
+                        if (currentSsid != null) break
+                    }
+                }
+                
+                excludedSsids = try {
+                    wifiExclusionRepository.excludedSsidsFlow.first()
+                } catch (_: Exception) { emptySet() }
+                
+                targetBypassState = currentSsid != null && excludedSsids.contains(currentSsid)
             } else {
-                LogManager.addLog("[Service] Mobile/Cellular network active -> Target Bypass State: false (Current: $isCurrentlyWifiBypassed)")
+                targetBypassState = false
             }
 
-            if (targetBypassState != isCurrentlyWifiBypassed) {
+            if (targetBypassState != isCurrentlyWifiBypassed || (forceConfigUpdate && isCurrentlyWifiBypassed)) {
+                val wasBypassed = isCurrentlyWifiBypassed
+
+                if (targetBypassState != wasBypassed) {
+                    if (isWifi && isEnabled) {
+                        LogManager.addLog("[Service] Wi-Fi network active. SSID: '${currentSsid ?: "<unknown>"}' | Target Bypass State: $targetBypassState")
+                    } else if (!isEnabled) {
+                        LogManager.addLog("[Service] Wi-Fi exclusion disabled -> Target Bypass State: false")
+                    } else {
+                        LogManager.addLog("[Service] Mobile/Cellular network active -> Target Bypass State: false")
+                    }
+                } else if (forceConfigUpdate && isCurrentlyWifiBypassed) {
+                    LogManager.addLog("[Service] Wi-Fi bypass configuration updated. Restarting VPN with new config.")
+                }
+
                 isCurrentlyWifiBypassed = targetBypassState
                 val activeConfig = if (targetBypassState) {
-                    LogManager.addLog("[Service] Connected to excluded Wi-Fi '${currentSsid ?: ""}'. Switching to Wi-Fi bypass config.")
+                    if (!wasBypassed) {
+                        LogManager.addLog("[Service] Connected to excluded Wi-Fi '${currentSsid ?: ""}'. Switching to Wi-Fi bypass config.")
+                    }
                     wifiExclusionRepository.getActiveBypassConfigJson()
                 } else {
-                    val netType = if (isWifi) "Wi-Fi" else "Cellular/Mobile"
-                    LogManager.addLog("[Service] Left excluded Wi-Fi ($netType). Restoring original VPN profile config.")
+                    if (wasBypassed) {
+                        val netType = if (isWifi) "Wi-Fi" else "Cellular/Mobile"
+                        LogManager.addLog("[Service] Left excluded Wi-Fi ($netType). Restoring original VPN profile config.")
+                    }
                     rawConfig
                 }
 

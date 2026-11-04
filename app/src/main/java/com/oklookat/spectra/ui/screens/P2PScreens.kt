@@ -45,6 +45,7 @@ import java.util.concurrent.Executors
 fun P2PReceiveDialog(
     url: String,
     token: String,
+    title: String = stringResource(R.string.p2p_receive),
     isTv: Boolean = false,
     onDismiss: () -> Unit
 ) {
@@ -87,7 +88,7 @@ fun P2PReceiveDialog(
                         verticalArrangement = Arrangement.spacedBy(16.dp)
                     ) {
                         Text(
-                            text = stringResource(R.string.p2p_receive),
+                            text = title,
                             style = MaterialTheme.typography.headlineLarge
                         )
                         Text(
@@ -141,7 +142,7 @@ fun P2PReceiveDialog(
                         verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         Text(
-                            text = stringResource(R.string.p2p_receive),
+                            text = title,
                             style = MaterialTheme.typography.titleLarge
                         )
                         Text(
@@ -184,7 +185,7 @@ fun P2PReceiveDialog(
                     verticalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
                     Text(
-                        text = stringResource(R.string.p2p_receive),
+                        text = title,
                         style = MaterialTheme.typography.headlineSmall,
                         textAlign = TextAlign.Center
                     )
@@ -243,7 +244,7 @@ fun P2PReceiveDialog(
 @Composable
 fun P2PScannerDialog(
     onDismiss: () -> Unit,
-    onQrScanned: (url: String, token: String) -> Unit
+    onQrScanned: (rawValue: String) -> Unit
 ) {
     val context = LocalContext.current
     var hasCameraPermission by remember {
@@ -291,7 +292,7 @@ fun P2PScannerDialog(
 
 @OptIn(ExperimentalGetImage::class)
 @Composable
-fun CameraPreview(onQrScanned: (url: String, token: String) -> Unit) {
+fun CameraPreview(onQrScanned: (rawValue: String) -> Unit) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
     val cameraExecutor = remember { Executors.newSingleThreadExecutor() }
@@ -314,24 +315,28 @@ fun CameraPreview(onQrScanned: (url: String, token: String) -> Unit) {
                     .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
                     .build()
 
+                var isScanned = false
                 imageAnalysis.setAnalyzer(cameraExecutor) { imageProxy ->
                     val mediaImage = imageProxy.image
-                    if (mediaImage != null) {
+                    if (mediaImage != null && !isScanned) {
                         val image = InputImage.fromMediaImage(mediaImage, imageProxy.imageInfo.rotationDegrees)
                         scanner.process(image)
                             .addOnSuccessListener { barcodes ->
                                 for (barcode in barcodes) {
                                     val rawValue = barcode.rawValue ?: continue
-                                    if (rawValue.startsWith("spectra://p2p")) {
-                                        val url = rawValue.substringAfter("url=").substringBefore("&")
-                                        val token = rawValue.substringAfter("token=").substringBefore("&")
-                                        onQrScanned(url, token)
+                                    if (rawValue.isNotBlank() && !isScanned) {
+                                        isScanned = true
+                                        com.oklookat.spectra.util.LogManager.addLog("[P2P Scanner] Scanned QR raw: $rawValue")
+                                        onQrScanned(rawValue)
+                                        break
                                     }
                                 }
                             }
                             .addOnCompleteListener {
                                 imageProxy.close()
                             }
+                    } else {
+                        imageProxy.close()
                     }
                 }
 
@@ -347,6 +352,62 @@ fun CameraPreview(onQrScanned: (url: String, token: String) -> Unit) {
         },
         modifier = Modifier.fillMaxSize()
     )
+}
+
+@Composable
+fun ShareProfileDialog(
+    qrText: String,
+    title: String,
+    isTv: Boolean = false,
+    onDismiss: () -> Unit
+) {
+    val qrBitmap = remember(qrText) {
+        QrUtils.generateQrCode(qrText)
+    }
+
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false)
+    ) {
+        Surface(
+            shape = MaterialTheme.shapes.extraLarge,
+            tonalElevation = 6.dp,
+            modifier = Modifier
+                .padding(if (isTv) 32.dp else 16.dp)
+                .widthIn(max = 420.dp)
+                .wrapContentHeight()
+        ) {
+            Column(
+                modifier = Modifier
+                    .padding(24.dp)
+                    .fillMaxWidth(),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleLarge,
+                    textAlign = TextAlign.Center
+                )
+                Text(
+                    text = stringResource(R.string.p2p_scan_qr_desc),
+                    style = MaterialTheme.typography.bodyMedium,
+                    textAlign = TextAlign.Center
+                )
+                Image(
+                    bitmap = qrBitmap.asImageBitmap(),
+                    contentDescription = null,
+                    modifier = Modifier.size(260.dp)
+                )
+                Button(
+                    onClick = onDismiss,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(stringResource(R.string.cancel))
+                }
+            }
+        }
+    }
 }
 
 @Composable

@@ -72,7 +72,8 @@ class SettingsViewModel @Inject constructor(
                 excludedWifiSsids = excludedSsids,
                 currentWifiSsid = currentSsid,
                 hasLocationPermission = hasLocPerm,
-                isIgnoringBatteryOptimizations = isIgnored
+                isIgnoringBatteryOptimizations = isIgnored,
+                p2pShareMode = settings.p2pShareMode
             )
         }.launchIn(viewModelScope)
     }
@@ -117,6 +118,12 @@ class SettingsViewModel @Inject constructor(
     fun updateSocksPort(port: Int) {
         viewModelScope.launch {
             settingsRepository.setSocksPort(port)
+        }
+    }
+
+    fun updateP2PShareMode(mode: String) {
+        viewModelScope.launch {
+            settingsRepository.setP2PShareMode(mode)
         }
     }
 

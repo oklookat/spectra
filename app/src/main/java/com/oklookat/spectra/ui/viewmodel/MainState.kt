@@ -24,7 +24,8 @@ data class SettingsState(
     val excludedWifiSsids: Set<String> = emptySet(),
     val currentWifiSsid: String? = null,
     val hasLocationPermission: Boolean = false,
-    val isIgnoringBatteryOptimizations: Boolean = false
+    val isIgnoringBatteryOptimizations: Boolean = false,
+    val p2pShareMode: String = "direct_qr"
 )
 
 data class MainUiState(

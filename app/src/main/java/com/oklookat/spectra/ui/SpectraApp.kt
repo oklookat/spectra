@@ -240,6 +240,8 @@ private fun AppNavigation(
                     settingsViewModel.refreshBatteryOptimizationStatus()
                     settingsViewModel.refreshWifiStatus()
                 },
+                onUpdateP2PShareMode = { settingsViewModel.updateP2PShareMode(it) },
+                onOpenP2PDebug = { navController.navigate(Screen.P2PDebug.route) },
                 onGetActiveConfig = { callback -> settingsViewModel.getActiveConfigJson(callback) }
             )
         }
@@ -270,6 +272,13 @@ private fun AppNavigation(
             DnsRoutingScreen(
                 viewModel = dnsRoutingViewModel,
                 onBack = { navController.popBackStack() }
+            )
+        }
+        composable(Screen.P2PDebug.route) {
+            val isTv = TvUtils.isTv(LocalContext.current)
+            P2PDebugScreen(
+                onBack = { navController.popBackStack() },
+                isTv = isTv
             )
         }
     }

@@ -8,7 +8,6 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.oklookat.spectra.R
 import com.oklookat.spectra.data.repository.WifiExclusionRepository
-import com.oklookat.spectra.service.XrayVpnService
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
@@ -78,7 +77,6 @@ class WifiExclusionsViewModel @Inject constructor(
     fun toggleWifiExclusion(enabled: Boolean) {
         viewModelScope.launch {
             wifiExclusionRepository.setWifiExclusionEnabled(enabled)
-            if (XrayVpnService.isServiceRunning) _events.emit(MainUiEvent.RestartVpn)
         }
     }
 
@@ -87,7 +85,6 @@ class WifiExclusionsViewModel @Inject constructor(
             wifiExclusionRepository.addWifiSsid(ssid)
             refreshWifiStatus()
             _events.emit(MainUiEvent.ShowToast(messageResId = R.string.wifi_added, formatArgs = listOf(ssid)))
-            if (XrayVpnService.isServiceRunning) _events.emit(MainUiEvent.RestartVpn)
         }
     }
 
@@ -96,7 +93,6 @@ class WifiExclusionsViewModel @Inject constructor(
             wifiExclusionRepository.removeWifiSsid(ssid)
             refreshWifiStatus()
             _events.emit(MainUiEvent.ShowToast(messageResId = R.string.wifi_removed, formatArgs = listOf(ssid)))
-            if (XrayVpnService.isServiceRunning) _events.emit(MainUiEvent.RestartVpn)
         }
     }
 
@@ -104,7 +100,6 @@ class WifiExclusionsViewModel @Inject constructor(
         viewModelScope.launch {
             wifiExclusionRepository.saveBypassDns(primary, secondary)
             _events.emit(MainUiEvent.ShowToast(messageResId = R.string.preset_updated))
-            if (XrayVpnService.isServiceRunning) _events.emit(MainUiEvent.RestartVpn)
         }
     }
 
@@ -112,15 +107,13 @@ class WifiExclusionsViewModel @Inject constructor(
         viewModelScope.launch {
             wifiExclusionRepository.saveCustomBypassConfigJson(json)
             _events.emit(MainUiEvent.ShowToast(messageResId = R.string.preset_updated))
-            if (XrayVpnService.isServiceRunning) _events.emit(MainUiEvent.RestartVpn)
         }
     }
 
     fun resetBypassConfigToDefault() {
         viewModelScope.launch {
             wifiExclusionRepository.resetBypassConfigToDefault()
-            _events.emit(MainUiEvent.ShowToast(messageResId = R.string.reset_to_all_vpn))
-            if (XrayVpnService.isServiceRunning) _events.emit(MainUiEvent.RestartVpn)
+            _events.emit(MainUiEvent.ShowToast(messageResId = R.string.reset_to_default_bypass))
         }
     }
 

@@ -19,6 +19,7 @@ import com.oklookat.spectra.domain.usecase.settings.CheckDeepLinkStatusUseCase
 import com.oklookat.spectra.domain.usecase.settings.GetSettingsUseCase
 import com.oklookat.spectra.domain.usecase.vpn.PrepareVpnConfigUseCase
 import com.oklookat.spectra.model.*
+import com.oklookat.spectra.service.HttpServerService
 import com.oklookat.spectra.util.*
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
@@ -47,7 +48,7 @@ class MainViewModel @Inject constructor(
     private val appFilterRepository: AppFilterRepository
 ) : AndroidViewModel(application) {
     private val updateManager = UpdateManager(application)
-    private val p2pClient = P2PClient(application)
+    private val p2pClient = P2PClient()
     private var p2pServer: P2PServer? = null
     
     private val UPDATE_URL = BuildConfig.UPDATE_URL
@@ -91,7 +92,8 @@ class MainViewModel @Inject constructor(
                         vpnDns = settings.vpnDns,
                         vpnAddressIpv6 = settings.vpnAddressIpv6,
                         vpnDnsIpv6 = settings.vpnDnsIpv6,
-                        vpnMtu = settings.vpnMtu
+                        vpnMtu = settings.vpnMtu,
+                        p2pShareMode = settings.p2pShareMode
                     )
                 )
             }
@@ -191,34 +193,55 @@ class MainViewModel @Inject constructor(
 
     // P2P Methods
     fun startP2PServer() {
-        if (p2pServer != null) return
-        val server = P2PServer(onPayloadReceived = { payload ->
+        if (HttpServerService.isServerRunning) {
+            LogManager.addLog("[P2P] HttpServerService is already running")
+            return
+        }
+
+        HttpServerService.setOnPayloadReceivedListener { payload ->
+            LogManager.addLog("[P2P] onPayloadReceived called on MainViewModel for device: ${payload.deviceName}")
             viewModelScope.launch(Dispatchers.Main) {
-                val existing = if (payload.profile != null) {
-                    uiState.profiles.find { it.name == payload.profile.name }
-                } else if (payload.group != null) {
-                    uiState.groups.find { it.name == payload.group.name }
+                val existing = if (payload.groupName != null) {
+                    uiState.groups.find { it.name == payload.groupName }
+                } else if (payload.profileName.isNotBlank()) {
+                    uiState.profiles.find { it.name == payload.profileName }
                 } else null
                 
+                LogManager.addLog("[P2P] Updating uiState with p2pPayloadToAccept, existing item match: ${existing != null}")
                 uiState = uiState.copy(
                     p2pPayloadToAccept = payload,
                     showP2PReplaceDialog = existing != null
                 )
             }
-        })
+        }
+
         try {
-            server.start()
-            p2pServer = server
-            uiState = uiState.copy(isP2PServerRunning = true, p2pServerUrl = server.getShareUrl(), p2pServerToken = server.token)
-            LogManager.addLog("[App] P2P Server started at ${server.getShareUrl()}")
+            HttpServerService.startService(getApplication())
+            viewModelScope.launch {
+                kotlinx.coroutines.delay(300)
+                val shareUrl = HttpServerService.serverUrl
+                val token = HttpServerService.serverToken
+                if (shareUrl != null && token != null) {
+                    uiState = uiState.copy(
+                        isP2PServerRunning = true,
+                        p2pServerUrl = shareUrl,
+                        p2pServerToken = token
+                    )
+                    LogManager.addLog("[P2P] Foreground HttpServerService started successfully at $shareUrl with token $token")
+                } else {
+                    LogManager.addLog("[P2P] HttpServerService started")
+                }
+            }
         } catch (e: Exception) {
             val error = e.message ?: "Unknown error"
-            LogManager.addLog("[App] P2P Server error: $error")
+            LogManager.addLog("[P2P] HttpServerService start error: $error")
             viewModelScope.launch { _events.emit(MainUiEvent.ShowToast(messageResId = R.string.p2p_server_error, formatArgs = listOf(error))) }
         }
     }
 
     fun stopP2PServer() {
+        HttpServerService.stopService(getApplication())
+        HttpServerService.setOnPayloadReceivedListener(null)
         p2pServer?.stop()
         p2pServer = null
         uiState = uiState.copy(isP2PServerRunning = false, p2pServerUrl = null, p2pServerToken = null, p2pPayloadToAccept = null, showP2PReplaceDialog = false)
@@ -227,15 +250,18 @@ class MainViewModel @Inject constructor(
 
     fun sendP2PPayload(url: String, token: String, payload: P2PPayload) {
         viewModelScope.launch {
+            LogManager.addLog("[P2P] Starting sendP2PPayload to $url with token $token")
             val finalPayload = payload.copy(
                 deviceName = Build.MODEL,
                 token = token
             )
             val result = p2pClient.sendPayload(url, finalPayload)
             if (result.isSuccess) {
+                LogManager.addLog("[P2P] sendP2PPayload succeeded")
                 _events.emit(MainUiEvent.ShowToast(messageResId = R.string.p2p_sent_success))
             } else {
                 val error = result.exceptionOrNull()?.message ?: "Unknown error"
+                LogManager.addLog("[P2P] sendP2PPayload failed: $error")
                 _events.emit(MainUiEvent.ShowToast(messageResId = R.string.p2p_send_failed, formatArgs = listOf(error)))
             }
         }
@@ -246,40 +272,24 @@ class MainViewModel @Inject constructor(
         viewModelScope.launch {
             try {
                 var objectName = "Object"
-                if (payload.profile != null) {
-                    val p = payload.profile
-                    objectName = p.name
-                    if (p.isRemote && p.url != null) {
-                        addRemoteProfileUseCase(p.name, p.url, p.autoUpdateEnabled, p.autoUpdateIntervalMinutes)
-                    } else if (payload.profileContent != null) {
-                        saveLocalProfileUseCase(p.name, payload.profileContent)
+                if (payload.groupName != null) {
+                    objectName = payload.groupName
+                    val existingGroup = uiState.groups.find { it.name == payload.groupName }
+                    val targetGroup = existingGroup ?: Group(id = java.util.UUID.randomUUID().toString(), name = payload.groupName).also { saveGroupUseCase(it) }
+                    payload.groupProfiles?.forEach { item ->
+                        val p = item.profile
+                        if (p.isRemote && p.url != null) {
+                            addRemoteProfileUseCase(p.name, p.url, p.autoUpdateEnabled, p.autoUpdateIntervalMinutes, targetGroup.id)
+                        } else if (item.content != null) {
+                            saveLocalProfileUseCase(p.name, item.content, targetGroup.id)
+                        }
                     }
-                } else if (payload.group != null) {
-                    val g = payload.group
-                    objectName = g.name
-                    val existingGroup = uiState.groups.find { it.name == g.name }
-                    
-                    if (g.isRemote && g.url != null) {
-                        // Remote group: just add/update group by URL
-                        addRemoteGroupUseCase(g.name, g.url, g.autoUpdateEnabled, g.autoUpdateIntervalMinutes)
-                    } else {
-                        // Local group (or bundle of profiles): 
-                        val targetGroup = if (existingGroup != null && uiState.showP2PReplaceDialog) {
-                            g.copy(id = existingGroup.id)
-                        } else {
-                            g.copy(id = java.util.UUID.randomUUID().toString())
-                        }
-                        
-                        saveGroupUseCase(targetGroup)
-                        val targetGroupId = targetGroup.id
-                        
-                        payload.groupProfiles?.forEach { (profile, content) ->
-                            if (profile.isRemote && profile.url != null) {
-                                 addRemoteProfileUseCase(profile.name, profile.url, profile.autoUpdateEnabled, profile.autoUpdateIntervalMinutes, targetGroupId)
-                            } else if (content != null) {
-                                saveLocalProfileUseCase(profile.name, content, targetGroupId)
-                            }
-                        }
+                } else if (payload.profileName.isNotBlank()) {
+                    objectName = payload.profileName
+                    if (payload.isRemote && payload.profileUrl != null) {
+                        addRemoteProfileUseCase(payload.profileName, payload.profileUrl, payload.autoUpdateEnabled, payload.autoUpdateIntervalMinutes)
+                    } else if (payload.profileContent != null) {
+                        saveLocalProfileUseCase(payload.profileName, payload.profileContent)
                     }
                 }
                 LogManager.addLog("[App] P2P payload accepted: $objectName")
@@ -287,12 +297,75 @@ class MainViewModel @Inject constructor(
             } catch (e: Exception) {
                 LogManager.addLog("[App] Error accepting P2P payload: ${e.message}")
             }
-            uiState = uiState.copy(p2pPayloadToAccept = null, showP2PReplaceDialog = false)
+            stopP2PServer()
+        }
+    }
+
+    fun importFromQrString(rawValue: String, p2pPayloadToSend: P2PPayload? = null) {
+        viewModelScope.launch {
+            try {
+                val trimmed = rawValue.trim()
+                LogManager.addLog("[Import] Processing QR content: ${trimmed.take(60)}...")
+
+                if (trimmed.startsWith("spectra://import")) {
+                    val uri = android.net.Uri.parse(trimmed)
+                    val name = uri.getQueryParameter("name") ?: "Imported"
+                    val type = uri.getQueryParameter("type")
+                    val compressedData = uri.getQueryParameter("data")
+                    if (!compressedData.isNullOrBlank()) {
+                        val decompressed = P2PCompressUtils.decompress(compressedData)
+                        if (type == "group") {
+                            val bundle = P2PCompressUtils.parseGroupBundle(decompressed)
+                            if (bundle != null) {
+                                val targetGroup = bundle.group.copy(id = java.util.UUID.randomUUID().toString())
+                                saveGroupUseCase(targetGroup)
+                                bundle.profiles.forEach { item ->
+                                    val profile = item.profile
+                                    if (profile.isRemote && profile.url != null) {
+                                        addRemoteProfileUseCase(profile.name, profile.url, profile.autoUpdateEnabled, profile.autoUpdateIntervalMinutes, targetGroup.id)
+                                    } else if (item.content != null) {
+                                        saveLocalProfileUseCase(profile.name, item.content, targetGroup.id)
+                                    }
+                                }
+                                LogManager.addLog("[Import] Group imported from QR: ${targetGroup.name}")
+                                _events.emit(MainUiEvent.ShowToast(messageResId = R.string.p2p_processed, formatArgs = listOf(targetGroup.name)))
+                            }
+                        } else {
+                            saveLocalProfileUseCase(name, decompressed)
+                            LogManager.addLog("[Import] Profile imported from QR: $name")
+                            _events.emit(MainUiEvent.ShowToast(messageResId = R.string.p2p_processed, formatArgs = listOf(name)))
+                        }
+                    }
+                } else if (trimmed.startsWith("spectra://p2p")) {
+                    val uri = android.net.Uri.parse(trimmed)
+                    val url = uri.getQueryParameter("url")
+                    val token = uri.getQueryParameter("token")
+                    if (!url.isNullOrBlank() && !token.isNullOrBlank() && p2pPayloadToSend != null) {
+                        sendP2PPayload(url, token, p2pPayloadToSend)
+                    }
+                } else if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) {
+                    addRemoteProfileUseCase("Remote Profile", trimmed, false, 0)
+                    LogManager.addLog("[Import] Remote profile imported: $trimmed")
+                    _events.emit(MainUiEvent.ShowToast(messageResId = R.string.p2p_processed, formatArgs = listOf("Remote Profile")))
+                } else if (ShareLinkParser.isShareLink(trimmed)) {
+                    val node = ShareLinkParser.parseNode(trimmed)
+                    val profileName = if (node.remarks.isNotBlank()) node.remarks else "Imported Profile"
+                    saveLocalProfileUseCase(profileName, trimmed)
+                    LogManager.addLog("[Import] Profile link imported: $profileName")
+                    _events.emit(MainUiEvent.ShowToast(messageResId = R.string.p2p_processed, formatArgs = listOf(profileName)))
+                } else {
+                    LogManager.addLog("[Import] Unknown QR string format")
+                    _events.emit(MainUiEvent.ShowToast(messageResId = R.string.p2p_send_failed, formatArgs = listOf("Unknown QR format")))
+                }
+            } catch (e: Exception) {
+                LogManager.addLog("[Import] QR import error: ${e.message}")
+                _events.emit(MainUiEvent.ShowToast(messageResId = R.string.p2p_send_failed, formatArgs = listOf(e.message ?: "Import error")))
+            }
         }
     }
 
     fun rejectP2PPayload() {
-        uiState = uiState.copy(p2pPayloadToAccept = null, showP2PReplaceDialog = false)
+        stopP2PServer()
     }
 
     override fun onCleared() {

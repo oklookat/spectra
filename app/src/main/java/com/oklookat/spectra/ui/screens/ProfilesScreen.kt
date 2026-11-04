@@ -29,8 +29,10 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.oklookat.spectra.R
 import com.oklookat.spectra.model.Group
 import com.oklookat.spectra.model.P2PPayload
-import com.oklookat.spectra.ui.theme.SpectraTheme
 import com.oklookat.spectra.model.Profile
+import com.oklookat.spectra.model.ProfileTransferItem
+import com.oklookat.spectra.ui.theme.SpectraTheme
+import com.oklookat.spectra.util.P2PCompressUtils
 import com.oklookat.spectra.ui.components.*
 import com.oklookat.spectra.ui.viewmodel.MainViewModel
 import com.oklookat.spectra.ui.viewmodel.ProfileSort
@@ -89,6 +91,9 @@ fun ProfilesScreen(
 
     var showP2PScanner by remember { mutableStateOf(false) }
     var p2pPayloadToSend by remember { mutableStateOf<P2PPayload?>(null) }
+    var showShareQrDialog by remember { mutableStateOf(false) }
+    var shareQrText by remember { mutableStateOf("") }
+    var shareQrTitle by remember { mutableStateOf("") }
 
     val filePicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
         uri?.let {
@@ -135,22 +140,19 @@ fun ProfilesScreen(
                 onDismissGroupMenu = { showGroupMenu = false },
                 onShareGroup = {
                     selectedGroup?.let { group ->
-                        p2pPayloadToSend = if (group.isRemote) {
-                            P2PPayload(
-                                group = group,
-                                groupProfiles = null
-                            )
+                        val groupProfiles = uiState.profiles
+                            .filter { it.groupId == group.id }
+                            .map { ProfileTransferItem(profile = it, content = viewModel.getProfileContent(it)) }
+                        
+                        p2pPayloadToSend = P2PPayload(groupName = group.name, groupProfiles = groupProfiles)
+                        
+                        if (mainUiState.settings.p2pShareMode == "server") {
+                            showP2PScanner = true
                         } else {
-                            val groupProfiles = uiState.profiles
-                                .filter { it.groupId == group.id }
-                                .map { it to viewModel.getProfileContent(it) }
-                            
-                            P2PPayload(
-                                group = group,
-                                groupProfiles = groupProfiles
-                            )
+                            shareQrText = P2PCompressUtils.buildGroupQrString(group, groupProfiles)
+                            shareQrTitle = group.name
+                            showShareQrDialog = true
                         }
-                        showP2PScanner = true
                     }
                 },
                 onEditGroup = {
@@ -172,7 +174,13 @@ fun ProfilesScreen(
                     onShowMenu = { showMenu = true },
                     showMenu = showMenu,
                     onDismissMenu = { showMenu = false },
-                    onP2PReceive = { mainViewModel.startP2PServer() },
+                    onP2PReceive = {
+                        if (mainUiState.settings.p2pShareMode == "server") {
+                            mainViewModel.startP2PServer()
+                        } else {
+                            showP2PScanner = true
+                        }
+                    },
                     onAddGroup = {
                         editingGroup = null
                         showGroupDialog = true
@@ -322,11 +330,22 @@ fun ProfilesScreen(
                                     viewModel.refreshRemoteProfiles(setOf(profile.id))
                                 },
                                 onShareP2PClick = {
+                                    val content = viewModel.getProfileContent(profile)
                                     p2pPayloadToSend = P2PPayload(
-                                        profile = profile,
-                                        profileContent = viewModel.getProfileContent(profile)
+                                        profileName = profile.name,
+                                        profileContent = content,
+                                        profileUrl = profile.url,
+                                        isRemote = profile.isRemote,
+                                        autoUpdateEnabled = profile.autoUpdateEnabled,
+                                        autoUpdateIntervalMinutes = profile.autoUpdateIntervalMinutes
                                     )
-                                    showP2PScanner = true
+                                    if (mainUiState.settings.p2pShareMode == "server") {
+                                        showP2PScanner = true
+                                    } else {
+                                        shareQrText = P2PCompressUtils.buildProfileQrString(profile, content)
+                                        shareQrTitle = profile.name
+                                        showShareQrDialog = true
+                                    }
                                 },
                                 onDeleteClick = {
                                     viewModel.deleteProfiles(setOf(profile.id))
@@ -383,11 +402,22 @@ fun ProfilesScreen(
                                     viewModel.refreshRemoteProfiles(setOf(profile.id))
                                 },
                                 onShareP2PClick = {
+                                    val content = viewModel.getProfileContent(profile)
                                     p2pPayloadToSend = P2PPayload(
-                                        profile = profile,
-                                        profileContent = viewModel.getProfileContent(profile)
+                                        profileName = profile.name,
+                                        profileContent = content,
+                                        profileUrl = profile.url,
+                                        isRemote = profile.isRemote,
+                                        autoUpdateEnabled = profile.autoUpdateEnabled,
+                                        autoUpdateIntervalMinutes = profile.autoUpdateIntervalMinutes
                                     )
-                                    showP2PScanner = true
+                                    if (mainUiState.settings.p2pShareMode == "server") {
+                                        showP2PScanner = true
+                                    } else {
+                                        shareQrText = P2PCompressUtils.buildProfileQrString(profile, content)
+                                        shareQrTitle = profile.name
+                                        showShareQrDialog = true
+                                    }
                                 },
                                 onDeleteClick = {
                                     viewModel.deleteProfiles(setOf(profile.id))
@@ -424,7 +454,11 @@ fun ProfilesScreen(
             onDismiss = { showMenu = false },
             onP2PReceive = { 
                 showMenu = false
-                mainViewModel.startP2PServer() 
+                if (mainUiState.settings.p2pShareMode == "server") {
+                    mainViewModel.startP2PServer()
+                } else {
+                    showP2PScanner = true
+                }
             },
             onAddGroup = {
                 showMenu = false
@@ -480,11 +514,28 @@ fun ProfilesScreen(
     }
 
     if (mainUiState.isP2PServerRunning && mainUiState.p2pServerUrl != null && mainUiState.p2pServerToken != null) {
+        val dialogTitle = if (shareQrTitle.isNotBlank()) shareQrTitle else stringResource(R.string.p2p_receive)
         P2PReceiveDialog(
+            title = dialogTitle,
             url = mainUiState.p2pServerUrl,
             token = mainUiState.p2pServerToken,
             isTv = isTv,
-            onDismiss = { mainViewModel.stopP2PServer() }
+            onDismiss = { 
+                mainViewModel.stopP2PServer()
+                shareQrTitle = ""
+            }
+        )
+    }
+
+    if (showShareQrDialog) {
+        ShareProfileDialog(
+            qrText = shareQrText,
+            title = shareQrTitle,
+            isTv = isTv,
+            onDismiss = {
+                showShareQrDialog = false
+                mainViewModel.stopP2PServer()
+            }
         )
     }
 
@@ -494,10 +545,8 @@ fun ProfilesScreen(
                 showP2PScanner = false
                 p2pPayloadToSend = null
             },
-            onQrScanned = { url, token ->
-                p2pPayloadToSend?.let { payload ->
-                    mainViewModel.sendP2PPayload(url, token, payload)
-                }
+            onQrScanned = { rawValue ->
+                mainViewModel.importFromQrString(rawValue, p2pPayloadToSend)
                 showP2PScanner = false
                 p2pPayloadToSend = null
             }
@@ -505,9 +554,10 @@ fun ProfilesScreen(
     }
 
     mainUiState.p2pPayloadToAccept?.let { payload ->
+        val payloadName = if (payload.groupName != null) payload.groupName else payload.profileName.ifBlank { "Unknown" }
         P2PConfirmDialog(
             deviceName = payload.deviceName,
-            payloadName = if (payload.profile != null) payload.profile.name else payload.group?.name ?: "Unknown",
+            payloadName = payloadName,
             isReplace = mainUiState.showP2PReplaceDialog,
             onAccept = { mainViewModel.acceptP2PPayload() },
             onReject = { mainViewModel.rejectP2PPayload() }

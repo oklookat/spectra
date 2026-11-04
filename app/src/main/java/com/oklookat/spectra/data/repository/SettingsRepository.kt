@@ -38,6 +38,7 @@ class SettingsRepository @Inject constructor(
         val DNS_LOG = booleanPreferencesKey("dns_log")
         val MASK_ADDRESS = stringPreferencesKey("mask_address")
         val PRIVACY_MODE = booleanPreferencesKey("privacy_mode")
+        val P2P_SHARE_MODE = stringPreferencesKey("p2p_share_mode")
     }
 
     val settingsFlow: Flow<SettingsData> = context.dataStore.data.map { preferences ->
@@ -69,6 +70,7 @@ class SettingsRepository @Inject constructor(
             dnsLog = preferences[PreferencesKeys.DNS_LOG] ?: false,
             maskAddress = preferences[PreferencesKeys.MASK_ADDRESS] ?: "",
             isPrivacyModeEnabled = preferences[PreferencesKeys.PRIVACY_MODE] ?: false,
+            p2pShareMode = preferences[PreferencesKeys.P2P_SHARE_MODE] ?: "direct_qr",
             customDnsConfig = dnsConfig,
             customRoutingConfig = routingConfig
         )
@@ -134,6 +136,12 @@ class SettingsRepository @Inject constructor(
         }
     }
 
+    suspend fun setP2PShareMode(mode: String) {
+        context.dataStore.edit {
+            it[PreferencesKeys.P2P_SHARE_MODE] = mode
+        }
+    }
+
     suspend fun getSettingsDataOnce(): SettingsData = settingsFlow.first()
 }
 
@@ -151,6 +159,7 @@ data class SettingsData(
     val dnsLog: Boolean = false,
     val maskAddress: String = "",
     val isPrivacyModeEnabled: Boolean = false,
+    val p2pShareMode: String = "direct_qr",
     val customDnsConfig: CustomDnsConfig = CustomDnsConfig.default(),
     val customRoutingConfig: CustomRoutingConfig = CustomRoutingConfig.default()
 )

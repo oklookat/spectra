@@ -302,7 +302,7 @@ fun WifiExclusionsScreen(
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp, vertical = 8.dp)
             ) {
-                Text(stringResource(R.string.reset_to_all_vpn))
+                Text(stringResource(R.string.reset_to_default_bypass))
             }
         }
     }

@@ -50,6 +50,8 @@ fun SettingsScreen(
     onRemoveWifiSsid: (String) -> Unit = {},
     onRequestLocationPermission: () -> Unit = {},
     onRefreshStatus: () -> Unit = {},
+    onUpdateP2PShareMode: (String) -> Unit = {},
+    onOpenP2PDebug: () -> Unit = {},
     onGetActiveConfig: ((String) -> Unit) -> Unit = { it("") }
 ) {
     var showActiveConfigDialog by remember { mutableStateOf(false) }
@@ -325,6 +327,55 @@ fun SettingsScreen(
                             singleLine = true
                         )
                         Spacer(modifier = Modifier.height(8.dp))
+                    }
+                }
+            }
+
+            // Transfer & Sharing Mode
+            Column(
+                modifier = Modifier.padding(horizontal = 16.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                SettingsSectionTitle(stringResource(R.string.p2p_share_mode))
+                OutlinedCard(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = MaterialTheme.shapes.large
+                ) {
+                    Column(modifier = Modifier.padding(vertical = 8.dp)) {
+                        AppListItem(
+                            headlineContent = { Text(stringResource(R.string.p2p_mode_direct_qr)) },
+                            supportingContent = { Text(stringResource(R.string.p2p_share_mode_desc)) },
+                            leadingContent = {
+                                RadioButton(
+                                    selected = uiState.p2pShareMode == "direct_qr",
+                                    onClick = { onUpdateP2PShareMode("direct_qr") }
+                                )
+                            },
+                            onClick = { onUpdateP2PShareMode("direct_qr") },
+                            isTv = isTv
+                        )
+                        HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                        AppListItem(
+                            headlineContent = { Text(stringResource(R.string.p2p_mode_server)) },
+                            supportingContent = { Text(stringResource(R.string.p2p_share_mode_desc)) },
+                            leadingContent = {
+                                RadioButton(
+                                    selected = uiState.p2pShareMode == "server",
+                                    onClick = { onUpdateP2PShareMode("server") }
+                                )
+                            },
+                            onClick = { onUpdateP2PShareMode("server") },
+                            isTv = isTv
+                        )
+                        HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                        AppListItem(
+                            headlineContent = { Text(stringResource(R.string.p2p_debug)) },
+                            supportingContent = { Text(stringResource(R.string.p2p_debug_desc)) },
+                            leadingContent = { Icon(Icons.Default.BugReport, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
+                            trailingContent = { Icon(Icons.AutoMirrored.Filled.NavigateNext, contentDescription = null) },
+                            onClick = onOpenP2PDebug,
+                            isTv = isTv
+                        )
                     }
                 }
             }
