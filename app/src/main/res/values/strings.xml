@@ -117,6 +117,7 @@
 
     <!-- Logs Screen -->
     <string name="toggle_pause">Pause</string>
+    <string name="copy">Copy</string>
     <string name="copy_logs">Copy Logs</string>
     <string name="clear_logs">Clear Logs</string>
     <string name="log_settings">Log Settings</string>

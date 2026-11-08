@@ -14,6 +14,7 @@ This document is a comprehensive developer and AI agent handbook for **Spectra**
 - **Dependency Injection**: Hilt (`@HiltViewModel`, `@AndroidEntryPoint`)
 - **Persistence**: Room Database (`AppDatabase`) & DataStore Preferences
 - **Core Engine**: `libv2ray.aar` (`AndroidLibXrayLite`) wrapping Xray-core
+- **Xray-core Documentation**: [Official Xray-core Documentation (LLM format)](https://xtls.github.io/llms-full.txt)
 
 ---
 
@@ -113,13 +114,13 @@ app/src/main/java/com/oklookat/spectra/
 
 ### Rule 2: Freedom Outbound (`direct-out`) & System DNS
 > [!CRITICAL]
-> In `FreedomSettings`, always use `@SerializedName("domainStrategy") val domainStrategy: String = "UseIPv4"`.
-> **Never** name this property `targetStrategy`!
+> In `freedom` outbound (e.g., `direct-out`), set `domainStrategy` via `streamSettings.sockopt.domainStrategy = "UseIPv4"`.
+> Do **NOT** use deprecated `freedom.domainStrategy` / `freedom.targetStrategy` in `settings`, and do **NOT** use deprecated `nonIPQuery` / `blockTypes` in `dns` outbound `settings`.
 
-- **Why**: Misnaming `domainStrategy` causes Gson to serialize `{}` for `FreedomSettings`.
-- **Consequence**: Xray defaults `freedom` outbound to `AsIs`. In `AsIs` mode, Xray delegates domain resolution to Android's OS resolver (`getaddrinfo`).
+- **Why**: `freedom.domainStrategy` is deprecated in Xray-core and migrated to `streamSettings.sockopt.domainStrategy`. Setting `sockopt.domainStrategy = "UseIPv4"` ensures Xray resolves domains internally.
+- **Consequence**: Omitting `sockopt.domainStrategy` causes Xray to default `freedom` outbound to `AsIs`. In `AsIs` mode, Xray delegates domain resolution to Android's OS resolver (`getaddrinfo`).
 - **Android Bug**: When a VPN is running and the device switches networks (e.g., Wi-Fi turned off -> Cellular), Android's system `getaddrinfo` for bypassed applications (`addDisallowedApplication`) **hangs indefinitely or fails**.
-- **Fix**: Setting `domainStrategy = "UseIPv4"` in `FreedomSettings` forces Xray to resolve domains internally using its built-in DNS (DoH 1.1.1.1 over `proxy-out`), completely bypassing Android's broken `getaddrinfo`.
+- **Fix**: Setting `domainStrategy = "UseIPv4"` in `streamSettings.sockopt` forces Xray to resolve domains internally using its built-in DNS (over `proxy-out`), completely bypassing Android's broken `getaddrinfo`.
 
 ### Rule 3: TUN Settings Schema for Xray-Core
 > [!WARNING]

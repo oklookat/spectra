@@ -112,11 +112,11 @@ class WifiExclusionRepository @Inject constructor(
                     "tag" to "tun-in",
                     "settings" to mapOf(
                         "name" to "tun0",
-                        "MTU" to mtu
+                        "mtu" to mtu
                     ),
                     "sniffing" to mapOf(
                         "enabled" to true,
-                        "destOverride" to listOf("http", "tls", "quic")
+                        "destOverride" to listOf("http", "tls", "quic", "fakedns")
                     )
                 )
             ),
@@ -124,14 +124,16 @@ class WifiExclusionRepository @Inject constructor(
                 mapOf(
                     "tag" to "direct-out",
                     "protocol" to "freedom",
-                    "settings" to mapOf(
-                        "domainStrategy" to "UseIPv4"
+                    "streamSettings" to mapOf(
+                        "sockopt" to mapOf(
+                            "domainStrategy" to "UseIPv4"
+                        )
                     )
                 ),
                 mapOf(
                     "tag" to "dns-out",
                     "protocol" to "dns",
-                    "settings" to mapOf("nonIPQuery" to "skip")
+                    "settings" to emptyMap<String, Any>()
                 ),
                 mapOf(
                     "tag" to "block-out",

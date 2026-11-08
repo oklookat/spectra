@@ -55,8 +55,8 @@ class SettingsViewModel @Inject constructor(
             wifiExclusionRepository.isWifiExclusionEnabledFlow,
             wifiExclusionRepository.excludedSsidsFlow
         ) { settings, isWifiExclusionEnabled, excludedSsids ->
-            val hasLocPerm = wifiExclusionRepository.hasLocationPermission()
-            val currentSsid = wifiExclusionRepository.getCurrentWifiSsid()
+            val hasLocPerm = if (isWifiExclusionEnabled) wifiExclusionRepository.hasLocationPermission() else false
+            val currentSsid = if (isWifiExclusionEnabled) wifiExclusionRepository.getCurrentWifiSsid() else null
             val isIgnored = checkBatteryOptimization()
 
             uiState = uiState.copy(
@@ -84,6 +84,7 @@ class SettingsViewModel @Inject constructor(
     }
 
     fun refreshWifiStatus() {
+        if (!uiState.isWifiExclusionEnabled) return
         val hasLocPerm = wifiExclusionRepository.hasLocationPermission()
         val currentSsid = wifiExclusionRepository.getCurrentWifiSsid()
         uiState = uiState.copy(

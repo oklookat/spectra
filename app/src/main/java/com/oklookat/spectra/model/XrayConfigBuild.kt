@@ -77,7 +77,7 @@ object XrayConfigBuild {
                     ),
                     sniffing = Sniffing(
                         enabled = true,
-                        destOverride = listOf("http", "tls", "quic")
+                        destOverride = listOf("http", "tls", "quic", "fakedns")
                     )
                 )
             ),
@@ -86,12 +86,15 @@ object XrayConfigBuild {
                 Outbound(
                     tag = "direct-out",
                     protocol = "freedom",
-                    settings = FreedomSettings(targetStrategy = "UseIPv4")
+                    settings = FreedomSettings(),
+                    streamSettings = StreamSettings(
+                        sockopt = Sockopt(domainStrategy = "UseIPv4")
+                    )
                 ),
                 Outbound(
                     protocol = "dns",
                     tag = "dns-out",
-                    settings = DnsOutboundSettings(nonIPQuery = "skip")
+                    settings = DnsOutboundSettings()
                 ),
                 Outbound(
                     tag = "block-out",
@@ -674,6 +677,66 @@ object XrayConfigBuild {
                 }
             }
 
+            if (jsonObject.has("outbounds") && jsonObject.get("outbounds").isJsonArray) {
+                val outbounds = jsonObject.getAsJsonArray("outbounds")
+                for (i in 0 until outbounds.size()) {
+                    val outbound = outbounds.get(i)
+                    if (outbound.isJsonObject) {
+                        val outboundObj = outbound.asJsonObject
+                        val protocol = outboundObj.get("protocol")?.asString
+                        if (protocol == "freedom") {
+                            val settingsObj = outboundObj.getAsJsonObject("settings")
+                            var extractedStrategy: String? = null
+                            if (settingsObj != null) {
+                                if (settingsObj.has("domainStrategy")) {
+                                    extractedStrategy = settingsObj.get("domainStrategy").asString
+                                    settingsObj.remove("domainStrategy")
+                                    modified = true
+                                }
+                                if (settingsObj.has("targetStrategy")) {
+                                    extractedStrategy = extractedStrategy ?: settingsObj.get("targetStrategy").asString
+                                    settingsObj.remove("targetStrategy")
+                                    modified = true
+                                }
+                            }
+                            val strategyToSet = extractedStrategy ?: "UseIPv4"
+                            val streamSettingsObj = if (outboundObj.has("streamSettings") && outboundObj.get("streamSettings").isJsonObject) {
+                                outboundObj.getAsJsonObject("streamSettings")
+                            } else {
+                                val s = com.google.gson.JsonObject()
+                                outboundObj.add("streamSettings", s)
+                                modified = true
+                                s
+                            }
+                            val sockoptObj = if (streamSettingsObj.has("sockopt") && streamSettingsObj.get("sockopt").isJsonObject) {
+                                streamSettingsObj.getAsJsonObject("sockopt")
+                            } else {
+                                val s = com.google.gson.JsonObject()
+                                streamSettingsObj.add("sockopt", s)
+                                modified = true
+                                s
+                            }
+                            if (!sockoptObj.has("domainStrategy")) {
+                                sockoptObj.addProperty("domainStrategy", strategyToSet)
+                                modified = true
+                            }
+                        } else if (protocol == "dns") {
+                            val settingsObj = outboundObj.getAsJsonObject("settings")
+                            if (settingsObj != null) {
+                                if (settingsObj.has("nonIPQuery")) {
+                                    settingsObj.remove("nonIPQuery")
+                                    modified = true
+                                }
+                                if (settingsObj.has("blockTypes")) {
+                                    settingsObj.remove("blockTypes")
+                                    modified = true
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
             if (modified) {
                 return gson.toJson(jsonObject)
             }
@@ -721,9 +784,11 @@ object XrayConfigBuild {
                 val d = com.google.gson.JsonObject()
                 d.addProperty("tag", "direct-out")
                 d.addProperty("protocol", "freedom")
-                val s = com.google.gson.JsonObject()
-                s.addProperty("domainStrategy", "UseIPv4")
-                d.add("settings", s)
+                val streamSettings = com.google.gson.JsonObject()
+                val sockopt = com.google.gson.JsonObject()
+                sockopt.addProperty("domainStrategy", "UseIPv4")
+                streamSettings.add("sockopt", sockopt)
+                d.add("streamSettings", streamSettings)
                 d
             }
 
@@ -861,7 +926,7 @@ data class TunSettings(
 @Keep
 data class Sniffing(
     @SerializedName("enabled") val enabled: Boolean = true,
-    @SerializedName("destOverride") val destOverride: List<String> = listOf("http", "tls", "quic")
+    @SerializedName("destOverride") val destOverride: List<String> = listOf("http", "tls", "quic", "fakedns")
 )
 
 @Keep
@@ -873,14 +938,10 @@ data class Outbound<T>(
 )
 
 @Keep
-data class FreedomSettings(
-    @SerializedName("targetStrategy") val targetStrategy: String = "UseIPv4"
-)
+class FreedomSettings
 
 @Keep
-data class DnsOutboundSettings(
-    @SerializedName("nonIPQuery") val nonIPQuery: String = "skip"
-)
+class DnsOutboundSettings
 
 @Keep
 data class BlackholeSettings(
@@ -1108,6 +1169,7 @@ data class HttpSettings(
 data class Sockopt(
     @SerializedName("tcpFastOpen") val tcpFastOpen: Boolean = true,
     @SerializedName("tcpCongestion") val tcpCongestion: String = "bbr",
-    @SerializedName("tcpNoDelay") val tcpNoDelay: Boolean = true
+    @SerializedName("tcpNoDelay") val tcpNoDelay: Boolean = true,
+    @SerializedName("domainStrategy") val domainStrategy: String? = null
 )
 // endregion

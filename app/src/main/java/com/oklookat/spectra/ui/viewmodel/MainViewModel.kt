@@ -240,12 +240,15 @@ class MainViewModel @Inject constructor(
     }
 
     fun stopP2PServer() {
+        val wasRunning = uiState.isP2PServerRunning || p2pServer != null
         HttpServerService.stopService(getApplication())
         HttpServerService.setOnPayloadReceivedListener(null)
         p2pServer?.stop()
         p2pServer = null
         uiState = uiState.copy(isP2PServerRunning = false, p2pServerUrl = null, p2pServerToken = null, p2pPayloadToAccept = null, showP2PReplaceDialog = false)
-        LogManager.addLog("[App] P2P Server stopped")
+        if (wasRunning) {
+            LogManager.addLog("[App] P2P Server stopped")
+        }
     }
 
     fun sendP2PPayload(url: String, token: String, payload: P2PPayload) {

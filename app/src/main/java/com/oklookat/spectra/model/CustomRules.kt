@@ -59,6 +59,13 @@ data class CustomRoutingConfig(
             ),
             RoutingRuleConfig(
                 id = "3",
+                name = "Category RU Direct",
+                outboundTag = "direct-out",
+                domains = listOf("geosite:category-ru"),
+                enabled = true
+            ),
+            RoutingRuleConfig(
+                id = "4",
                 name = "BitTorrent Direct",
                 outboundTag = "direct-out",
                 protocols = listOf("bittorrent"),

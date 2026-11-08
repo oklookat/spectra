@@ -50,8 +50,8 @@ class WifiExclusionsViewModel @Inject constructor(
             wifiExclusionRepository.bypassDnsSecondaryFlow,
             wifiExclusionRepository.customBypassConfigJsonFlow
         ) { enabled, ssids, primaryDns, secondaryDns, customJson ->
-            val hasLocPerm = wifiExclusionRepository.hasLocationPermission()
-            val currentSsid = wifiExclusionRepository.getCurrentWifiSsid()
+            val hasLocPerm = if (enabled) wifiExclusionRepository.hasLocationPermission() else false
+            val currentSsid = if (enabled) wifiExclusionRepository.getCurrentWifiSsid() else null
 
             uiState = uiState.copy(
                 isWifiExclusionEnabled = enabled,
@@ -66,6 +66,7 @@ class WifiExclusionsViewModel @Inject constructor(
     }
 
     fun refreshWifiStatus() {
+        if (!uiState.isWifiExclusionEnabled) return
         val hasLocPerm = wifiExclusionRepository.hasLocationPermission()
         val currentSsid = wifiExclusionRepository.getCurrentWifiSsid()
         uiState = uiState.copy(
@@ -77,6 +78,9 @@ class WifiExclusionsViewModel @Inject constructor(
     fun toggleWifiExclusion(enabled: Boolean) {
         viewModelScope.launch {
             wifiExclusionRepository.setWifiExclusionEnabled(enabled)
+            if (enabled && !wifiExclusionRepository.hasLocationPermission()) {
+                _events.emit(MainUiEvent.RequestLocationPermission)
+            }
         }
     }
 

@@ -513,7 +513,7 @@ private fun ActiveConfigDialog(
                     android.widget.Toast.makeText(context, copiedText, android.widget.Toast.LENGTH_SHORT).show()
                 }
             }) {
-                Text(stringResource(R.string.copy_logs))
+                Text(stringResource(R.string.copy))
             }
         },
         dismissButton = {

@@ -115,6 +115,7 @@
 
     <!-- Экран логов -->
     <string name="toggle_pause">Пауза</string>
+    <string name="copy">Копировать</string>
     <string name="copy_logs">Копировать логи</string>
     <string name="clear_logs">Очистить логи</string>
     <string name="log_settings">Настройки логов</string>

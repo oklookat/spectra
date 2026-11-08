@@ -69,6 +69,9 @@ fun WifiExclusionsScreen(
                         ?: event.message ?: ""
                     snackbarHostState.showSnackbar(message)
                 }
+                is MainUiEvent.RequestLocationPermission -> {
+                    onRequestLocationPermission()
+                }
                 else -> {}
             }
         }
@@ -126,7 +129,7 @@ fun WifiExclusionsScreen(
                     .padding(horizontal = 16.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                if (!uiState.hasLocationPermission) {
+                if (uiState.isWifiExclusionEnabled && !uiState.hasLocationPermission) {
                     Card(
                         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer)
                     ) {
